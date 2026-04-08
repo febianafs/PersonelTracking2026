@@ -1,11 +1,18 @@
 package com.example.personeltracking2026.ui.bodycam
 
 import android.Manifest
+import android.app.PictureInPictureParams
 import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.graphics.Rect
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import android.view.View
+import android.view.ViewGroup
 import android.widget.PopupMenu
 import android.widget.Toast
+import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
@@ -21,6 +28,7 @@ import com.example.personeltracking2026.data.repository.BodycamRepository
 import com.example.personeltracking2026.databinding.ActivityBodycamBinding
 import com.pedro.common.ConnectChecker
 import com.pedro.encoder.input.video.CameraHelper
+import com.pedro.encoder.utils.gl.AspectRatioMode
 import com.pedro.library.rtmp.RtmpCamera2
 import com.pedro.library.view.OpenGlView
 import kotlinx.coroutines.launch
@@ -37,6 +45,11 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
     private var isMicEnabled = true
     private var isCameraEnabled = true
     private var isSurfaceReady = false
+
+    // Data xml camera card effect
+    private var originalRadius: Float = 0f
+    private var originalElevation: Float = 0f
+    private var originalMargins: ViewGroup.MarginLayoutParams? = null
 
     companion object {
         const val RTMP_URL = "rtmp://147.139.161.159:22935/personel"
@@ -126,6 +139,24 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
             checkAndRequestPermissions()
         }
 
+        // Masuk mode PiP ketika menekan tombol back
+        onBackPressedDispatcher.addCallback(this) {
+            if (viewModel.isLive()) {
+                enterPipMode()
+            } else {
+                finish()
+            }
+        }
+
+        // Simpan data original camera card effect
+        binding.cameraCard.post {
+            originalRadius = binding.cameraCard.radius
+            originalElevation = binding.cameraCard.cardElevation
+
+            val params = binding.cameraCard.layoutParams as ViewGroup.MarginLayoutParams
+            originalMargins = ViewGroup.MarginLayoutParams(params)
+        }
+
         setupResolutionToggle()
         setupClickListeners()
         observeStreamState()
@@ -136,6 +167,7 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
         super.onResume()
         // SARAN 1: cek isSurfaceReady sebelum startPreview
         if (!isSurfaceReady) return
+        if (isInPictureInPictureMode) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             == PackageManager.PERMISSION_GRANTED && isCameraEnabled
         ) {
@@ -146,8 +178,13 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
     override fun onPause() {
         super.onPause()
         // Hentikan stream sebelum pause
-        if (viewModel.isLive()) viewModel.stopStream()
-        stopCameraPreview()
+        // if (viewModel.isLive()) viewModel.stopStream()
+        // stopCameraPreview()
+
+        if (!isInPictureInPictureMode) {
+            if (viewModel.isLive()) viewModel.stopStream()
+            stopCameraPreview()
+        }
     }
 
     override fun onDestroy() {
@@ -433,6 +470,9 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
             }
             is StreamState.Ended -> {
                 stopRtmpStream()
+
+                stopCameraPreview()
+
                 binding.surfaceView?.visibility = View.GONE
                 binding.layoutIdle?.visibility = View.GONE
                 binding.layoutEnded?.visibility = View.VISIBLE
@@ -465,6 +505,67 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
                 }
             }
             show()
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    //  PiP Mode
+    // ─────────────────────────────────────────────
+
+    private fun enterPipMode() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+            val rect = Rect()
+            binding.surfaceView.getGlobalVisibleRect(rect)
+
+            val params = PictureInPictureParams.Builder()
+                .setAspectRatio(Rational(16, 9))
+                .setSourceRectHint(rect)
+                .build()
+
+            enterPictureInPictureMode(params)
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+
+        if (isInPictureInPictureMode) {
+
+            // Hapus card effect pas masuk mode PiP
+            binding.cameraCard.radius = 0f
+            binding.cameraCard.cardElevation = 0f
+            binding.cameraCard.setCardBackgroundColor(android.graphics.Color.BLACK)
+            (binding.cameraCard.layoutParams as ViewGroup.MarginLayoutParams).apply {
+                setMargins(0,0,0,0)
+            }
+
+            // Hide semua UI pas masuk mode PiP
+            binding.toolbar?.visibility = View.GONE
+            binding.controlPanel.visibility = View.GONE
+            binding.layoutResolution?.visibility = View.GONE
+            binding.imgChart?.visibility = View.GONE
+            binding.liveIndicator.visibility = View.GONE
+        } else {
+
+            // Balikin card effect ke semula
+            binding.cameraCard.radius = originalRadius
+            binding.cameraCard.cardElevation = originalElevation
+            val params = binding.cameraCard.layoutParams as ViewGroup.MarginLayoutParams
+            originalMargins?.let {
+                params.setMargins(it.leftMargin, it.topMargin, it.rightMargin, it.bottomMargin)
+            }
+            binding.cameraCard.requestLayout()
+
+            // Show semua UI pas keluar mode PiP
+            binding.toolbar?.visibility = View.VISIBLE
+            binding.controlPanel.visibility = View.VISIBLE
+            binding.layoutResolution?.visibility = View.VISIBLE
+            binding.imgChart?.visibility = View.VISIBLE
+            binding.liveIndicator.visibility = View.VISIBLE
         }
     }
 }

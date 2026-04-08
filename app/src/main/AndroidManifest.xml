@@ -35,6 +35,8 @@
             android:exported="false" />
         <activity
             android:name=".ui.bodycam.BodycamActivity"
+            android:supportsPictureInPicture="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:exported="false" />
         <activity
             android:name=".ui.personel.PersonelActivity"
