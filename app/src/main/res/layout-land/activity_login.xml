@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/login"
+    android:background="@color/background2"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ui.login.LoginActivity">
+
+    <!-- CONNECTING BANNER -->
+    <LinearLayout
+        android:id="@+id/layoutConnecting"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@color/primary"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:padding="6dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ProgressBar
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:indeterminateTint="@color/white" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Connecting..."
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:layout_marginStart="8dp" />
+
+    </LinearLayout>
+
+    <!-- CONTENT ROW -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:orientation="horizontal"
+        app:layout_constraintTop_toBottomOf="@id/layoutConnecting"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- KIRI — branding -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="24dp">
+
+            <ImageView
+                android:id="@+id/imgPlanet"
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:src="@drawable/img_planet"
+                android:scaleType="fitCenter"
+                android:alpha="0.9"
+                android:adjustViewBounds="true" />
+
+            <TextView
+                android:id="@+id/txtTagline"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PERSONEL TRACKING"
+                android:textColor="@color/gray"
+                android:textSize="12sp"
+                android:letterSpacing="0.2"
+                android:layout_marginTop="12dp" />
+
+            <ImageView
+                android:id="@+id/imgChart"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:src="@drawable/img_chart"
+                android:scaleType="fitXY"
+                android:alpha="0.6"
+                android:layout_marginTop="16dp" />
+
+        </LinearLayout>
+
+        <!-- KANAN — form login -->
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/scrollView"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:fillViewport="true"
+            android:clipToPadding="false"
+            android:overScrollMode="never">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="300dp"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="12dp">
+
+                <!-- LOGIN CARD -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/loginCard"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="8dp"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintVertical_bias="0.5">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:background="@color/background">
+
+                        <!-- STRIPES -->
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:src="@drawable/bg_toolbar_stripes"
+                            android:scaleType="fitXY" />
+
+                        <!-- KONTEN CARD -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:padding="16dp">
+
+                            <!-- TITLE -->
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="AUTHENTICATION SYSTEM"
+                                android:textSize="13sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/white"
+                                android:layout_gravity="center"
+                                android:layout_marginBottom="12dp" />
+
+                            <!-- EMAIL -->
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:id="@+id/tilUsername"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="10dp"
+                                app:boxBackgroundMode="outline"
+                                app:hintTextColor="@color/white"
+                                app:boxStrokeColor="@color/gray">
+
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/etUsername"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:hint="Username/Email"
+                                    android:textColor="@color/white"
+                                    android:textColorHint="@color/white"
+                                    android:inputType="text" />
+
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <!-- PASSWORD -->
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:id="@+id/tilPassword"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="12dp"
+                                app:boxBackgroundMode="outline"
+                                app:endIconMode="password_toggle"
+                                app:endIconTint="@color/gray"
+                                app:hintTextColor="@color/white"
+                                app:boxStrokeColor="@color/gray">
+
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/etPassword"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:hint="Password"
+                                    android:textColor="@color/white"
+                                    android:textColorHint="@color/white"
+                                    android:inputType="textPassword" />
+
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <!-- LOGIN BUTTON -->
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnLogin"
+                                android:layout_width="match_parent"
+                                android:layout_height="48dp"
+                                android:text="LOGIN"
+                                android:textStyle="bold"
+                                style="@style/Widget.App.PrimaryButton" />
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+        </androidx.core.widget.NestedScrollView>
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

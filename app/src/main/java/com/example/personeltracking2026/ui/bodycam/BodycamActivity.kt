@@ -1,0 +1,470 @@
+package com.example.personeltracking2026.ui.bodycam
+
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.view.View
+import android.widget.PopupMenu
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import com.example.personeltracking2026.R
+import com.example.personeltracking2026.core.base.BaseActivity
+import com.example.personeltracking2026.data.repository.BodycamRepository
+import com.example.personeltracking2026.databinding.ActivityBodycamBinding
+import com.pedro.common.ConnectChecker
+import com.pedro.encoder.input.video.CameraHelper
+import com.pedro.library.rtmp.RtmpCamera2
+import com.pedro.library.view.OpenGlView
+import kotlinx.coroutines.launch
+
+class BodycamActivity : BaseActivity(), ConnectChecker {
+
+    private lateinit var binding: ActivityBodycamBinding
+    private lateinit var rtmpCamera: RtmpCamera2
+
+    private val viewModel: BodycamViewModel by viewModels {
+        BodycamViewModel.Factory(BodycamRepository())
+    }
+
+    private var isMicEnabled = true
+    private var isCameraEnabled = true
+    private var isSurfaceReady = false
+
+    companion object {
+        const val RTMP_URL = "rtmp://147.139.161.159:22935/personel"
+        val RESOLUTION_SD = Pair(854, 480)
+        val RESOLUTION_HD = Pair(1280, 720)
+    }
+
+    // ─────────────────────────────────────────────
+    //  ConnectChecker callbacks
+    // ─────────────────────────────────────────────
+
+    override fun onConnectionStarted(url: String) {}
+
+    override fun onConnectionSuccess() {
+        runOnUiThread {
+            Toast.makeText(this, "Stream terhubung", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onConnectionFailed(reason: String) {
+        // SARAN 4: restart preview setelah koneksi gagal
+        runOnUiThread {
+            Toast.makeText(this, "Koneksi gagal: $reason", Toast.LENGTH_SHORT).show()
+            viewModel.stopStream()
+            startCameraPreview()
+        }
+    }
+
+    override fun onNewBitrate(bitrate: Long) {}
+
+    override fun onDisconnect() {
+        runOnUiThread {
+            Toast.makeText(this, "Stream terputus", Toast.LENGTH_SHORT).show()
+            // Auto stop stream di ViewModel saat disconnect tak terduga
+            if (viewModel.isLive()) viewModel.stopStream()
+        }
+    }
+
+    override fun onAuthError() {
+        runOnUiThread {
+            Toast.makeText(this, "Auth error", Toast.LENGTH_SHORT).show()
+            viewModel.stopStream()
+        }
+    }
+
+    override fun onAuthSuccess() {}
+
+    // ─────────────────────────────────────────────
+    //  Permission launcher
+    // ─────────────────────────────────────────────
+
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val cameraGranted = permissions[Manifest.permission.CAMERA] == true
+        val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] == true
+        when {
+            cameraGranted && audioGranted -> startCameraPreview()
+            !cameraGranted -> Toast.makeText(this, "Izin kamera diperlukan", Toast.LENGTH_SHORT).show()
+            !audioGranted -> Toast.makeText(this, "Izin mikrofon diperlukan", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    //  Lifecycle
+    // ─────────────────────────────────────────────
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityBodycamBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        WindowCompat.setDecorFitsSystemWindows(window, true)
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            insets
+        }
+
+        val glView = binding.surfaceView as OpenGlView
+        rtmpCamera = RtmpCamera2(glView, this)
+
+        // SARAN 9: hanya panggil permission request sekali via post,
+        // onResume akan handle resume selanjutnya
+        binding.surfaceView.post {
+            isSurfaceReady = true
+            checkAndRequestPermissions()
+        }
+
+        setupResolutionToggle()
+        setupClickListeners()
+        observeStreamState()
+        observeTimer()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // SARAN 1: cek isSurfaceReady sebelum startPreview
+        if (!isSurfaceReady) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            == PackageManager.PERMISSION_GRANTED && isCameraEnabled
+        ) {
+            startCameraPreview()
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Hentikan stream sebelum pause
+        if (viewModel.isLive()) viewModel.stopStream()
+        stopCameraPreview()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // SARAN 8: reset isSurfaceReady saat destroy
+        isSurfaceReady = false
+        if (::rtmpCamera.isInitialized) {
+            if (rtmpCamera.isStreaming) rtmpCamera.stopStream()
+            if (rtmpCamera.isOnPreview) rtmpCamera.stopPreview()
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    //  Permission
+    // ─────────────────────────────────────────────
+
+    private fun checkAndRequestPermissions() {
+        val permissions = arrayOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO
+        )
+        val allGranted = permissions.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+        if (allGranted) startCameraPreview() else permissionLauncher.launch(permissions)
+    }
+
+    private fun hasCameraPermission() = ContextCompat.checkSelfPermission(
+        this, Manifest.permission.CAMERA
+    ) == PackageManager.PERMISSION_GRANTED
+
+    private fun hasAudioPermission() = ContextCompat.checkSelfPermission(
+        this, Manifest.permission.RECORD_AUDIO
+    ) == PackageManager.PERMISSION_GRANTED
+
+    // ─────────────────────────────────────────────
+    //  Camera Preview
+    // ─────────────────────────────────────────────
+
+    private fun startCameraPreview() {
+        if (!isSurfaceReady) return
+        if (!hasCameraPermission()) {
+            permissionLauncher.launch(
+                arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+            )
+            return
+        }
+        if (rtmpCamera.isOnPreview) return
+        val res = if (viewModel.isHdSelected.value) RESOLUTION_HD else RESOLUTION_SD
+        try {
+            rtmpCamera.startPreview(CameraHelper.Facing.BACK, res.first, res.second)
+            binding.layoutIdle?.visibility = View.GONE
+            binding.surfaceView?.visibility = View.VISIBLE
+        } catch (e: Exception) {
+            Toast.makeText(this, "Gagal membuka kamera: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun stopCameraPreview() {
+        try {
+            if (::rtmpCamera.isInitialized && rtmpCamera.isOnPreview) {
+                rtmpCamera.stopPreview()
+            }
+        } catch (e: Exception) {
+            // Abaikan GL release error dari RootEncoder
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    //  RTMP Stream
+    // ─────────────────────────────────────────────
+
+    private fun startRtmpStream() {
+        if (!hasAudioPermission()) {
+            Toast.makeText(this, "Izin mikrofon diperlukan", Toast.LENGTH_SHORT).show()
+            viewModel.stopStream()
+            return
+        }
+
+        // SARAN 3: jangan prepare ulang kalau sudah streaming
+        if (rtmpCamera.isStreaming) return
+
+        val res = if (viewModel.isHdSelected.value) RESOLUTION_HD else RESOLUTION_SD
+        val videoBitrate = if (viewModel.isHdSelected.value) 2500 * 1024 else 1000 * 1024
+
+        try {
+            // SARAN 7: bungkus dengan try-catch
+            val prepared = rtmpCamera.prepareAudio(
+                128 * 1024,
+                44100,
+                true
+            ) && rtmpCamera.prepareVideo(
+                res.first,
+                res.second,
+                30,
+                videoBitrate,
+                CameraHelper.getCameraOrientation(this)
+            )
+
+            if (prepared) {
+                rtmpCamera.startStream(RTMP_URL)
+            } else {
+                Toast.makeText(this, "Gagal mempersiapkan stream", Toast.LENGTH_SHORT).show()
+                viewModel.stopStream()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error stream: ${e.message}", Toast.LENGTH_SHORT).show()
+            viewModel.stopStream()
+        }
+    }
+
+    private fun stopRtmpStream() {
+        // SARAN 5: cek isStreaming dulu sebelum stop
+        if (::rtmpCamera.isInitialized && rtmpCamera.isStreaming) {
+            rtmpCamera.stopStream()
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    //  Mic Toggle
+    // ─────────────────────────────────────────────
+
+    private fun toggleMic() {
+        isMicEnabled = !isMicEnabled
+        if (isMicEnabled) rtmpCamera.enableAudio() else rtmpCamera.disableAudio()
+        binding.btnMic?.setImageResource(
+            if (isMicEnabled) R.drawable.ic_mic else R.drawable.ic_mic_off
+        )
+        binding.btnMic?.alpha = if (isMicEnabled) 1f else 0.5f
+        Toast.makeText(
+            this,
+            if (isMicEnabled) "Mikrofon aktif" else "Mikrofon mati",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    // ─────────────────────────────────────────────
+    //  Camera On/Off
+    // ─────────────────────────────────────────────
+
+    private fun toggleCamera() {
+        isCameraEnabled = !isCameraEnabled
+        if (isCameraEnabled) {
+            binding.btnVideo?.setImageResource(R.drawable.ic_cam)
+            binding.btnVideo?.alpha = 1f
+            binding.surfaceView?.visibility = View.VISIBLE
+            // Delay agar GL context sempat siap
+            binding.surfaceView.postDelayed({
+                if (isSurfaceReady && hasCameraPermission()) startCameraPreview()
+            }, 300)
+        } else {
+            if (viewModel.isLive()) viewModel.stopStream()
+            stopCameraPreview()
+            binding.surfaceView?.visibility = View.GONE
+            binding.btnVideo?.setImageResource(R.drawable.ic_cam_off)
+            binding.btnVideo?.alpha = 0.5f
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    //  Resolution Toggle
+    // ─────────────────────────────────────────────
+
+    private fun setupResolutionToggle() {
+        updateResolutionUi(viewModel.isHdSelected.value)
+
+        binding.btnSd?.setOnClickListener {
+            if (!viewModel.isLive()) {
+                viewModel.setResolution(false)
+                updateResolutionUi(false)
+                restartPreviewWithResolution()
+            }
+        }
+
+        binding.btnHd?.setOnClickListener {
+            if (!viewModel.isLive()) {
+                viewModel.setResolution(true)
+                updateResolutionUi(true)
+                restartPreviewWithResolution()
+            }
+        }
+    }
+
+    private fun updateResolutionUi(isHd: Boolean) {
+        binding.btnSd?.alpha = if (!isHd) 1f else 0.5f
+        binding.btnSd?.setBackgroundResource(
+            if (!isHd) R.drawable.bg_resolution_active else android.R.color.transparent
+        )
+        binding.btnSd?.setTextColor(
+            if (!isHd) ContextCompat.getColor(this, android.R.color.white)
+            else ContextCompat.getColor(this, R.color.gray)
+        )
+        binding.btnHd?.alpha = if (isHd) 1f else 0.5f
+        binding.btnHd?.setBackgroundResource(
+            if (isHd) R.drawable.bg_resolution_active else android.R.color.transparent
+        )
+        binding.btnHd?.setTextColor(
+            if (isHd) ContextCompat.getColor(this, android.R.color.white)
+            else ContextCompat.getColor(this, R.color.gray)
+        )
+        val canChange = !viewModel.isLive()
+        binding.btnSd?.isEnabled = canChange
+        binding.btnHd?.isEnabled = canChange
+    }
+
+    private fun restartPreviewWithResolution() {
+        stopCameraPreview()
+        binding.surfaceView.postDelayed({
+            if (isSurfaceReady && hasCameraPermission()) {
+                startCameraPreview()
+            }
+        }, 300)
+    }
+
+    // ─────────────────────────────────────────────
+    //  Click Listeners
+    // ─────────────────────────────────────────────
+
+    private fun setupClickListeners() {
+        binding.btnGoLive?.setOnClickListener {
+            when (viewModel.streamState.value) {
+                is StreamState.Idle -> viewModel.startStream()
+                is StreamState.Live -> viewModel.stopStream()
+                else -> {}
+            }
+        }
+        binding.btnMic?.setOnClickListener { toggleMic() }
+        binding.btnVideo?.setOnClickListener { toggleCamera() }
+        binding.btnSave?.setOnClickListener { viewModel.saveRecording() }
+        binding.btnDiscard?.setOnClickListener { viewModel.discardRecording() }
+        binding.btnOverflow?.setOnClickListener { showBodycamMenu(it) }
+    }
+
+    // ─────────────────────────────────────────────
+    //  Observe
+    // ─────────────────────────────────────────────
+
+    private fun observeStreamState() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.streamState.collect { state ->
+                    renderState(state)
+                }
+            }
+        }
+    }
+
+    private fun observeTimer() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.timerText.collect { time ->
+                    binding.tvTimer?.text = " $time"
+                }
+            }
+        }
+    }
+
+    private fun renderState(state: StreamState) {
+        when (state) {
+            is StreamState.Idle -> {
+                // SARAN 5: hanya stop kalau memang sedang streaming
+                stopRtmpStream()
+                binding.layoutIdle?.visibility = if (isCameraEnabled) View.VISIBLE else View.GONE
+                binding.layoutEnded?.visibility = View.GONE
+                binding.liveIndicator?.visibility = View.GONE
+                binding.tvLiveText?.text = "Go Live"
+                // SARAN 2: pastikan surfaceView visible & preview restart saat kembali Idle
+                if (isCameraEnabled) {
+                    binding.surfaceView?.visibility = View.VISIBLE
+                    startCameraPreview()
+                }
+                updateResolutionUi(viewModel.isHdSelected.value)
+                setControlsEnabled(false)
+            }
+            is StreamState.Live -> {
+                startRtmpStream()
+                binding.layoutIdle?.visibility = View.GONE
+                binding.layoutEnded?.visibility = View.GONE
+                binding.liveIndicator?.visibility = View.VISIBLE
+                binding.tvLiveText?.text = "Stop"
+                updateResolutionUi(viewModel.isHdSelected.value)
+                setControlsEnabled(true)
+            }
+            is StreamState.Ended -> {
+                stopRtmpStream()
+                binding.surfaceView?.visibility = View.GONE
+                binding.layoutIdle?.visibility = View.GONE
+                binding.layoutEnded?.visibility = View.VISIBLE
+                binding.liveIndicator?.visibility = View.GONE
+                binding.tvDuration?.text = "Duration: ${state.duration}"
+                binding.tvLiveText?.text = "Go Live"
+                updateResolutionUi(viewModel.isHdSelected.value)
+                setControlsEnabled(false)
+            }
+        }
+    }
+
+    private fun setControlsEnabled(isLive: Boolean) {
+        binding.btnMic?.isEnabled = true
+        binding.btnVideo?.isEnabled = true
+        binding.btnSd?.isEnabled = !isLive
+        binding.btnHd?.isEnabled = !isLive
+    }
+
+    private fun showBodycamMenu(anchor: View) {
+        PopupMenu(this, anchor).apply {
+            menuInflater.inflate(R.menu.menu_bodycam, menu)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.menu_settings -> {
+                        Toast.makeText(this@BodycamActivity, "Settings", Toast.LENGTH_SHORT).show()
+                        true
+                    }
+                    else -> false
+                }
+            }
+            show()
+        }
+    }
+}

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- PLANET -->
+    <dimen name="planet_size_min">60dp</dimen>
+    <dimen name="planet_size_max">120dp</dimen>
+
+    <!-- CARD -->
+    <dimen name="card_padding">24dp</dimen>
+    <dimen name="card_margin_horizontal">0dp</dimen>
+
+    <!-- TEXT -->
+    <dimen name="text_title">18sp</dimen>
+    <dimen name="text_subtitle">11sp</dimen>
+    <dimen name="text_tagline">11sp</dimen>
+    <dimen name="text_hint">14sp</dimen>
+
+    <!-- SPACING -->
+    <dimen name="spacing_planet_bottom">4dp</dimen>
+    <dimen name="spacing_tagline_bottom">12dp</dimen>
+    <dimen name="spacing_field_bottom">16dp</dimen>
+    <dimen name="spacing_password_bottom">24dp</dimen>
+
+    <!-- BUTTON -->
+    <dimen name="btn_height">48dp</dimen>
+
+    <!-- LAYOUT -->
+    <dimen name="layout_min_height">500dp</dimen>
+    <dimen name="layout_padding_horizontal">24dp</dimen>
+    <dimen name="layout_padding_vertical">16dp</dimen>
+
+    <!-- CHART -->
+    <dimen name="chart_height_min">60dp</dimen>
+    <dimen name="chart_height_max">120dp</dimen>
+</resources>
