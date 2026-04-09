@@ -2,11 +2,13 @@ package com.example.personeltracking2026.ui.bodycam
 
 import android.Manifest
 import android.app.PictureInPictureParams
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.util.Rational
 import android.view.View
 import android.view.ViewGroup
@@ -24,20 +26,21 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.base.BaseActivity
+import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.data.repository.BodycamRepository
 import com.example.personeltracking2026.databinding.ActivityBodycamBinding
+import com.example.personeltracking2026.ui.login.LoginActivity
 import com.pedro.common.ConnectChecker
 import com.pedro.encoder.input.video.CameraHelper
-import com.pedro.encoder.utils.gl.AspectRatioMode
 import com.pedro.library.rtmp.RtmpCamera2
 import com.pedro.library.view.OpenGlView
 import kotlinx.coroutines.launch
+import com.example.personeltracking2026.utils.DeviceIdProvider
 
 class BodycamActivity : BaseActivity(), ConnectChecker {
 
     private lateinit var binding: ActivityBodycamBinding
     private lateinit var rtmpCamera: RtmpCamera2
-
     private val viewModel: BodycamViewModel by viewModels {
         BodycamViewModel.Factory(BodycamRepository())
     }
@@ -50,12 +53,19 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
     private var originalRadius: Float = 0f
     private var originalElevation: Float = 0f
     private var originalMargins: ViewGroup.MarginLayoutParams? = null
+    private lateinit var sessionManager: SessionManager
 
     companion object {
-        const val RTMP_URL = "rtmp://147.139.161.159:22935/personel"
+        //const val RTMP_URL = "rtmp://147.139.161.159:22935/personel"
         val RESOLUTION_SD = Pair(854, 480)
         val RESOLUTION_HD = Pair(1280, 720)
     }
+
+    // Gabung RTMP Url + Device serial number
+    fun getRtmpUrl(serial: String): String {
+        return "rtmp://76.13.20.253:11935/personel/$serial"
+    }
+
 
     // ─────────────────────────────────────────────
     //  ConnectChecker callbacks
@@ -122,6 +132,12 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
         binding = ActivityBodycamBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Cek Device Serial Number
+        val deviceId = DeviceIdProvider.getDeviceId(this)
+        Log.d("DEVICE_ID", deviceId)
+
+        sessionManager = SessionManager(this)
+
         WindowCompat.setDecorFitsSystemWindows(window, true)
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -139,7 +155,7 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
             checkAndRequestPermissions()
         }
 
-        // Masuk mode PiP ketika menekan tombol back
+        // Masuk mode PiP ketika menekan tombol Back
         onBackPressedDispatcher.addCallback(this) {
             if (viewModel.isLive()) {
                 enterPipMode()
@@ -197,6 +213,15 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
         }
     }
 
+    // Masuk mode PiP ketika menekan tombol Home
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+
+        if (!isFinishing && !isDestroyed && viewModel.isLive()) {
+            enterPipMode()
+        }
+    }
+
     // ─────────────────────────────────────────────
     //  Permission
     // ─────────────────────────────────────────────
@@ -232,9 +257,13 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
             )
             return
         }
-        if (rtmpCamera.isOnPreview) return
+        //if (rtmpCamera.isOnPreview) return
         val res = if (viewModel.isHdSelected.value) RESOLUTION_HD else RESOLUTION_SD
         try {
+            if (rtmpCamera.isOnPreview) {
+                rtmpCamera.stopPreview()
+            }
+
             rtmpCamera.startPreview(CameraHelper.Facing.BACK, res.first, res.second)
             binding.layoutIdle?.visibility = View.GONE
             binding.surfaceView?.visibility = View.VISIBLE
@@ -258,6 +287,8 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
     // ─────────────────────────────────────────────
 
     private fun startRtmpStream() {
+        val serial = DeviceIdProvider.getDeviceId(this)
+        val url = getRtmpUrl(serial)
         if (!hasAudioPermission()) {
             Toast.makeText(this, "Izin mikrofon diperlukan", Toast.LENGTH_SHORT).show()
             viewModel.stopStream()
@@ -268,7 +299,11 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
         if (rtmpCamera.isStreaming) return
 
         val res = if (viewModel.isHdSelected.value) RESOLUTION_HD else RESOLUTION_SD
-        val videoBitrate = if (viewModel.isHdSelected.value) 2500 * 1024 else 1000 * 1024
+        val videoBitrate = if (viewModel.isHdSelected.value) {
+            800 * 1024  // HD
+        } else {
+            400 * 1024   // SD
+        }
 
         try {
             // SARAN 7: bungkus dengan try-catch
@@ -277,15 +312,15 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
                 44100,
                 true
             ) && rtmpCamera.prepareVideo(
-                res.first,
                 res.second,
-                30,
+                res.first,
+                24,
                 videoBitrate,
                 CameraHelper.getCameraOrientation(this)
             )
 
             if (prepared) {
-                rtmpCamera.startStream(RTMP_URL)
+                rtmpCamera.startStream(url)
             } else {
                 Toast.makeText(this, "Gagal mempersiapkan stream", Toast.LENGTH_SHORT).show()
                 viewModel.stopStream()
@@ -477,6 +512,7 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
                 binding.layoutIdle?.visibility = View.GONE
                 binding.layoutEnded?.visibility = View.VISIBLE
                 binding.liveIndicator?.visibility = View.GONE
+                binding.btnSave?.visibility = View.GONE
                 binding.tvDuration?.text = "Duration: ${state.duration}"
                 binding.tvLiveText?.text = "Go Live"
                 updateResolutionUi(viewModel.isHdSelected.value)
@@ -496,9 +532,17 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
         PopupMenu(this, anchor).apply {
             menuInflater.inflate(R.menu.menu_bodycam, menu)
             setOnMenuItemClickListener { item ->
+//                when (item.itemId) {
+//                    R.id.menu_settings -> {
+//                        Toast.makeText(this@BodycamActivity, "Settings", Toast.LENGTH_SHORT).show()
+//                        true
+//                    }
+//                    else -> false
+//                }
+
                 when (item.itemId) {
-                    R.id.menu_settings -> {
-                        Toast.makeText(this@BodycamActivity, "Settings", Toast.LENGTH_SHORT).show()
+                    R.id.back_to_login -> {
+                        logoutToLogin()
                         true
                     }
                     else -> false
@@ -509,11 +553,27 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
     }
 
     // ─────────────────────────────────────────────
+    //  Back ke MainActivity
+    // ─────────────────────────────────────────────
+
+    private fun logoutToLogin() {
+        sessionManager.clearSession()
+
+        val intent = Intent(this, LoginActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        startActivity(intent)
+        finish()
+    }
+
+
+    // ─────────────────────────────────────────────
     //  PiP Mode
     // ─────────────────────────────────────────────
 
     private fun enterPipMode() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+            if (isFinishing || isDestroyed) return
 
             val rect = Rect()
             binding.surfaceView.getGlobalVisibleRect(rect)
@@ -534,6 +594,37 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
 
         if (isInPictureInPictureMode) {
+
+            binding.pipOverlay?.visibility = View.VISIBLE
+            binding.pipOverlay?.alpha = 1f
+
+            // Refresh GL
+            binding.surfaceView.postDelayed({
+                try {
+                    if (rtmpCamera.isOnPreview) {
+                        rtmpCamera.stopPreview()
+                        rtmpCamera.startPreview(
+                            CameraHelper.Facing.BACK,
+                            if (viewModel.isHdSelected.value) RESOLUTION_HD.first else RESOLUTION_SD.first,
+                            if (viewModel.isHdSelected.value) RESOLUTION_HD.second else RESOLUTION_SD.second
+                        )
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
+                // fade out overlay
+                binding.pipOverlay?.postDelayed({
+                    binding.pipOverlay?.animate()
+                        ?.alpha(0f)
+                        ?.setDuration(300)
+                        ?.withEndAction {
+                            binding.pipOverlay?.visibility = View.GONE
+                        }
+                        ?.start()
+                }, 200)
+
+            }, 50)
 
             // Hapus card effect pas masuk mode PiP
             binding.cameraCard.radius = 0f

@@ -26,11 +26,11 @@
             android:gravity="center_vertical"
             android:paddingHorizontal="16dp">
 
-            <ImageView
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:src="@drawable/ic_logo_polri"
-                android:contentDescription="Logo"/>
+<!--            <ImageView-->
+<!--                android:layout_width="28dp"-->
+<!--                android:layout_height="28dp"-->
+<!--                android:src="@drawable/ic_logo_polri"-->
+<!--                android:contentDescription="Logo"/>-->
 
             <TextView
                 android:layout_width="wrap_content"
@@ -249,6 +249,14 @@
 
                 </LinearLayout>
             </LinearLayout>
+
+            <!-- Overlay refresh ketika masuk mode PiP -->
+            <View
+                android:id="@+id/pipOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#000"
+                android:visibility="gone"/>
 
         </FrameLayout>
     </androidx.cardview.widget.CardView>
