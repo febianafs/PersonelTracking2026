@@ -41,46 +41,43 @@ class PersonelActivity : BaseActivity() {
         PersonelViewModel.Factory(
             application,
             PersonelRepository(),
-            LocationRepository(this)
+            LocationRepository(this),
+            SessionManager(this)
         )
     }
 
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var syncRunnable: Runnable
 
-    private val zoneCenterLat = -7.868729
-    private val zoneCenterLon = 105.643117
+    private val zoneCenterLat    = -7.868729
+    private val zoneCenterLon    = 105.643117
     private val zonaRadiusMeters = 500.0
-    private var currentMapType = MapTypeManager.MapType.STANDARD
+    private var currentMapType   = MapTypeManager.MapType.STANDARD
 
-    // ─── PERMISSION REQUEST ─────────────────────────────────────────────────
+    // ─── PERMISSION ──────────────────────────────────────────────────────────
 
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (granted) {
-            startLocationUpdates()
-        } else {
-            Toast.makeText(this, "Location permission required", Toast.LENGTH_LONG).show()
-        }
+        if (granted) startLocationUpdates()
+        else Toast.makeText(this, "Location permission required", Toast.LENGTH_LONG).show()
     }
 
-    // ─── LIFECYCLE ──────────────────────────────────────────────────────────
+    // ─── LIFECYCLE ───────────────────────────────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
 
-        binding = ActivityPersonelBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        binding        = ActivityPersonelBinding.inflate(layoutInflater)
+        sessionManager = SessionManager(this)
+        mqttPrefs      = getSharedPreferences("mqtt_settings", MODE_PRIVATE)
 
+        setContentView(binding.root)
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayShowTitleEnabled(false)
-
-        sessionManager = SessionManager(this)
-        mqttPrefs = getSharedPreferences("mqtt_settings", MODE_PRIVATE)
 
         binding.btnOverflow.setOnClickListener { showOverflowMenu(it) }
 
@@ -94,12 +91,23 @@ class PersonelActivity : BaseActivity() {
         requestLocationPermission()
     }
 
+    // FIX ANR: register battery receiver di onStart, bukan di ViewModel.init{}
+    override fun onStart() {
+        super.onStart()
+        viewModel.registerBatteryReceiver(this)
+    }
+
+    // FIX ANR: unregister battery receiver di onStop
+    override fun onStop() {
+        super.onStop()
+        viewModel.unregisterBatteryReceiver(this)
+    }
+
     override fun onResume() {
         super.onResume()
         binding.mapView.onResume()
         loadIntervalFromSettings()
-        viewModel.refreshBattery()
-        viewModel.onMqttPublishSuccess()
+        // FIX ANR: hapus viewModel.refreshBattery() — sudah dihandle receiver
     }
 
     override fun onPause() {
@@ -113,85 +121,78 @@ class PersonelActivity : BaseActivity() {
         handler.removeCallbacks(syncRunnable)
     }
 
-    // ─── OBSERVERS ──────────────────────────────────────────────────────────
+    // ─── OBSERVERS ───────────────────────────────────────────────────────────
 
     private fun observeAllStates() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
 
-                // Lokasi dari device
+                // Lokasi GPS
                 launch {
                     viewModel.locationState.collect { state ->
-                        state.data?.let { loc ->
-                            updateCoordinates(loc.lat, loc.lon)
-                            drawMapOverlays(loc.lat, loc.lon)
-                        }
+                        state.data?.let { updateCoordinates(it.lat, it.lon); drawMapOverlays(it.lat, it.lon) }
                         updateGpsSignal(state.gpsStrength)
                         updateZoneStatus(state.isInZone)
-                        state.error?.let {
-                            Toast.makeText(this@PersonelActivity, it, Toast.LENGTH_SHORT).show()
-                        }
+                        state.error?.let { Toast.makeText(this@PersonelActivity, it, Toast.LENGTH_SHORT).show() }
                     }
                 }
 
-                // Baterai device
+                // Baterai
                 launch {
-                    viewModel.batteryState.collect { state ->
-                        updateBattery(state.percent)
-                    }
+                    viewModel.batteryState.collect { updateBattery(it.percent) }
                 }
 
-                // Data profil personel dari API
+                // Profil personel
                 launch {
                     viewModel.personelState.collect { state ->
                         when (state) {
                             is PersonelState.Loading -> {
                                 binding.tvName.text = "Loading..."
-                                binding.tvNRP.text = ""
+                                binding.tvNRP.text  = ""
                             }
                             is PersonelState.Success -> bindPersonelData(state.data)
-                            is PersonelState.Error -> {
+                            is PersonelState.Error   -> {
                                 binding.tvName.text = sessionManager.getName() ?: "-"
-                                binding.tvNRP.text = sessionManager.getUsername() ?: "-"
+                                binding.tvNRP.text  = sessionManager.getUsername() ?: "-"
                             }
                         }
                     }
                 }
 
-                // Status MQTT
+                // MQTT status
                 launch {
-                    viewModel.mqttConnected.collect { connected ->
-                        updateMqttStatus(connected)
-                    }
+                    viewModel.mqttConnected.collect { updateMqttStatus(it) }
                 }
 
-                // Last sync time
+                // Last sync
                 launch {
-                    viewModel.lastSyncTime.collect {
-                        updateLastSyncUI(it)
+                    viewModel.lastSyncTime.collect { updateLastSyncUI(it) }
+                }
+
+                // Heart rate dari BLE
+                launch {
+                    viewModel.heartRateState.collect { state ->
+                        updateHeartRate(state.bpm)
                     }
                 }
             }
         }
     }
 
-    // ─── LOAD PERSONEL DATA ─────────────────────────────────────────────────
+    // ─── PERSONEL ────────────────────────────────────────────────────────────
 
     private fun loadPersonelData() {
-        val token = sessionManager.getToken() ?: return
+        val token  = sessionManager.getToken()  ?: return
         val userId = sessionManager.getUserId() ?: return
         viewModel.loadPersonelDetail(userId, token)
     }
 
     private fun bindPersonelData(data: PersonelData) {
-        binding.tvName.text = sessionManager.getName() ?: "-"
-        binding.tvNRP.text = sessionManager.getUsername() ?: "-"
-        if (!data.image.isNullOrEmpty()) {
-            // TODO: load image pakai Glide/Coil nanti
-        }
+        binding.tvName.text = sessionManager.getName()     ?: "-"
+        binding.tvNRP.text  = sessionManager.getUsername() ?: "-"
     }
 
-    // ─── MAP ────────────────────────────────────────────────────────────────
+    // ─── MAP ─────────────────────────────────────────────────────────────────
 
     private fun setupMap() {
         Configuration.getInstance().userAgentValue = packageName
@@ -208,23 +209,18 @@ class PersonelActivity : BaseActivity() {
 
     private fun drawMapOverlays(lat: Double, lon: Double) {
         binding.mapView.overlays.clear()
-
         val marker = Marker(binding.mapView).apply {
             position = GeoPoint(lat, lon)
             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
             title = "Personnel Position"
-            icon = ResourcesCompat.getDrawable(resources, R.drawable.ic_location_pin, theme)
+            icon  = ResourcesCompat.getDrawable(resources, R.drawable.ic_location_pin, theme)
         }
-
         val circle = Polygon(binding.mapView).apply {
-            points = Polygon.pointsAsCircle(
-                GeoPoint(zoneCenterLat, zoneCenterLon), zonaRadiusMeters
-            )
-            fillPaint.color = android.graphics.Color.parseColor("#1A4FC3F7")
+            points = Polygon.pointsAsCircle(GeoPoint(zoneCenterLat, zoneCenterLon), zonaRadiusMeters)
+            fillPaint.color    = android.graphics.Color.parseColor("#1A4FC3F7")
             outlinePaint.color = android.graphics.Color.parseColor("#4FC3F7")
             outlinePaint.strokeWidth = 2f
         }
-
         binding.mapView.overlays.add(circle)
         binding.mapView.overlays.add(marker)
         binding.mapView.controller.setCenter(GeoPoint(lat, lon))
@@ -233,25 +229,23 @@ class PersonelActivity : BaseActivity() {
 
     private fun showMapTypeMenu() {
         val wrapper = android.view.ContextThemeWrapper(this, R.style.DarkPopupMenu)
-        val popup = android.widget.PopupMenu(wrapper, binding.btnMapType)
-        MapTypeManager.MapType.values().forEach { type ->
-            popup.menu.add(type.label)
-        }
-        popup.setOnMenuItemClickListener { menuItem ->
-            val selected = MapTypeManager.MapType.values()
-                .firstOrNull { it.label == menuItem.title.toString() }
-            selected?.let {
-                currentMapType = it
-                binding.mapView.setTileSource(MapTypeManager.getTileSource(it))
-                binding.mapView.invalidate()
-            }
+        val popup   = android.widget.PopupMenu(wrapper, binding.btnMapType)
+        MapTypeManager.MapType.values().forEach { popup.menu.add(it.label) }
+        popup.setOnMenuItemClickListener { item ->
+            MapTypeManager.MapType.values()
+                .firstOrNull { it.label == item.title.toString() }
+                ?.let {
+                    currentMapType = it
+                    binding.mapView.setTileSource(MapTypeManager.getTileSource(it))
+                    binding.mapView.invalidate()
+                }
             true
         }
         popup.show()
     }
 
     private fun updateCoordinates(lat: Double, lon: Double) {
-        binding.tvCoordinates.text = "$lat,"
+        binding.tvCoordinates.text  = "$lat,"
         binding.tvCoordinates2.text = " $lon"
     }
 
@@ -261,7 +255,7 @@ class PersonelActivity : BaseActivity() {
         binding.tvZoneStatus.setTextColor(android.graphics.Color.parseColor(color))
     }
 
-    // ─── LOCATION ───────────────────────────────────────────────────────────
+    // ─── LOCATION ────────────────────────────────────────────────────────────
 
     private fun requestLocationPermission() {
         val granted = ContextCompat.checkSelfPermission(
@@ -270,10 +264,7 @@ class PersonelActivity : BaseActivity() {
 
         if (granted) startLocationUpdates()
         else locationPermissionRequest.launch(
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            )
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         )
     }
 
@@ -287,28 +278,31 @@ class PersonelActivity : BaseActivity() {
     private fun parseIntervalToMs(interval: String): Long {
         return when {
             interval.contains("minute") -> {
-                val minutes = interval.filter { it.isDigit() }.toLongOrNull() ?: 1L
-                minutes * 60 * 1000
+                val m = interval.filter { it.isDigit() }.toLongOrNull() ?: 1L
+                m * 60 * 1000
             }
             interval.contains("second") -> {
-                val seconds = interval.filter { it.isDigit() }.toLongOrNull() ?: 5L
-                seconds * 1000
+                val s = interval.filter { it.isDigit() }.toLongOrNull() ?: 5L
+                s * 1000
             }
             else -> 5000L
         }
     }
 
-    // ─── VITAL SIGNS ────────────────────────────────────────────────────────
+    // ─── VITAL SIGNS UI ──────────────────────────────────────────────────────
 
     private fun setupVitalSignsInitial() {
-        // Heart rate masih hardcode sampai ada sensor real
-        updateHeartRate(87)
-        // GPS dan battery akan diisi dari observer
+        updateHeartRate(0)
         updateGpsSignal(0)
         updateMqttStatus(false)
     }
 
     private fun updateHeartRate(bpm: Int) {
+        if (bpm <= 0) {
+            binding.tvHeartRate.text = "-- BPM"
+            binding.progressHeartRate.progress = 0
+            return
+        }
         binding.tvHeartRate.text = "$bpm BPM"
         val progress = (bpm.coerceIn(40, 180) - 40) * 100 / 140
         binding.progressHeartRate.progress = progress
@@ -316,31 +310,31 @@ class PersonelActivity : BaseActivity() {
 
     private fun updateBattery(percent: Int) {
         val color = when {
-            percent > 60 -> "#69F0AE"
+            percent > 60      -> "#69F0AE"
             percent in 30..60 -> "#FFD740"
             percent in 10..29 -> "#FF6D00"
-            else -> "#FF5252"
+            else              -> "#FF5252"
         }
         val icon = when {
-            percent > 60 -> R.drawable.ic_battery_full
+            percent > 60      -> R.drawable.ic_battery_full
             percent in 30..60 -> R.drawable.ic_battery_half
             percent in 10..29 -> R.drawable.ic_battery_low
-            else -> R.drawable.ic_battery_empty
+            else              -> R.drawable.ic_battery_empty
         }
-        val parsedColor = android.graphics.Color.parseColor(color)
+        val parsedColor    = android.graphics.Color.parseColor(color)
         val colorStateList = android.content.res.ColorStateList.valueOf(parsedColor)
 
-        binding.tvBattery.text = "$percent%"
+        binding.tvBattery.text                   = "$percent%"
         binding.tvBattery.setTextColor(parsedColor)
         binding.iconBattery.setImageResource(icon)
-        binding.iconBattery.imageTintList = colorStateList
-        binding.progressBattery.progress = percent
+        binding.iconBattery.imageTintList        = colorStateList
+        binding.progressBattery.progress         = percent
         binding.progressBattery.progressTintList = colorStateList
 
         if (percent < 10) {
             val blink = android.view.animation.AlphaAnimation(1f, 0f).apply {
-                duration = 500
-                repeatMode = android.view.animation.Animation.REVERSE
+                duration    = 500
+                repeatMode  = android.view.animation.Animation.REVERSE
                 repeatCount = android.view.animation.Animation.INFINITE
             }
             binding.iconBattery.startAnimation(blink)
@@ -351,10 +345,10 @@ class PersonelActivity : BaseActivity() {
 
     private fun updateGpsSignal(strength: Int) {
         val (label, color) = when {
-            strength >= 80 -> Pair("Strong", "#4FC3F7")
-            strength in 50..79 -> Pair("Medium", "#FFD740")
-            strength > 0 -> Pair("Weak", "#FF5252")
-            else -> Pair("No Signal", "#FF5252")
+            strength >= 80     -> Pair("Strong",    "#4FC3F7")
+            strength in 50..79 -> Pair("Medium",    "#FFD740")
+            strength > 0       -> Pair("Weak",      "#FF5252")
+            else               -> Pair("No Signal", "#FF5252")
         }
         val parsedColor = android.graphics.Color.parseColor(color)
         binding.tvGpsSignal.text = label
@@ -365,53 +359,47 @@ class PersonelActivity : BaseActivity() {
     }
 
     private fun updateMqttStatus(connected: Boolean) {
-        val color = if (connected) "#69F0AE" else "#FF5252"
-        val label = if (connected) "Connected" else "Disconnected"
-        val parsedColor = android.graphics.Color.parseColor(color)
+        val color  = if (connected) "#69F0AE" else "#FF5252"
+        val label  = if (connected) "Connected" else "Disconnected"
+        val parsed = android.graphics.Color.parseColor(color)
         binding.tvMqttStatus.text = label
-        binding.tvMqttStatus.setTextColor(parsedColor)
+        binding.tvMqttStatus.setTextColor(parsed)
         binding.dotMqtt.backgroundTintList =
-            android.content.res.ColorStateList.valueOf(parsedColor)
+            android.content.res.ColorStateList.valueOf(parsed)
     }
 
-    // ─── INTERVAL ───────────────────────────────────────────────────────────
+    // ─── INTERVAL ────────────────────────────────────────────────────────────
 
     private fun loadIntervalFromSettings() {
         val interval = mqttPrefs.getString("interval", "5 seconds") ?: "5 seconds"
-        val short = interval
-            .replace(" seconds", "s")
-            .replace(" second", "s")
-            .replace(" minutes", "m")
-            .replace(" minute", "m")
-        binding.tvInterval.text = short
+        binding.tvInterval.text = interval
+            .replace(" seconds", "s").replace(" second", "s")
+            .replace(" minutes", "m").replace(" minute", "m")
     }
 
-    // ─── LAST SYNC ──────────────────────────────────────────────────────────
+    // ─── LAST SYNC ───────────────────────────────────────────────────────────
 
     private fun updateLastSyncUI(lastSyncTime: Long) {
-        val diffMs = System.currentTimeMillis() - lastSyncTime
+        val diffMs  = System.currentTimeMillis() - lastSyncTime
         val diffSec = diffMs / 1000
         val diffMin = diffSec / 60
-
         val (text, color) = when {
             diffSec < 10 -> Pair("Just now", "#69F0AE")
             diffSec < 60 -> Pair("${diffSec}s ago", "#69F0AE")
             diffMin < 5  -> Pair("${diffMin}m ago", "#FFD740")
-            else -> Pair(
+            else         -> Pair(
                 "Failed · ${
                     java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
                         .format(java.util.Date(lastSyncTime))
-                }", "#FF5252"
+                }",
+                "#FF5252"
             )
         }
-
-        val parsedColor = android.graphics.Color.parseColor(color)
+        val parsed = android.graphics.Color.parseColor(color)
         binding.tvLastSync.text = text
-        binding.tvLastSync.setTextColor(parsedColor)
-        binding.dotLastSync.backgroundTintList =
-            android.content.res.ColorStateList.valueOf(parsedColor)
-        binding.iconSync.imageTintList =
-            android.content.res.ColorStateList.valueOf(parsedColor)
+        binding.tvLastSync.setTextColor(parsed)
+        binding.dotLastSync.backgroundTintList = android.content.res.ColorStateList.valueOf(parsed)
+        binding.iconSync.imageTintList         = android.content.res.ColorStateList.valueOf(parsed)
     }
 
     private fun startSyncTimer() {
@@ -422,14 +410,11 @@ class PersonelActivity : BaseActivity() {
         handler.post(syncRunnable)
     }
 
-    // ─── CLICK LISTENERS ────────────────────────────────────────────────────
+    // ─── CLICK LISTENERS ─────────────────────────────────────────────────────
 
     private fun setupClickListeners() {
         binding.btnDataSelengkapnya.setOnClickListener {
             // TODO: buka bottom sheet data lengkap
-        }
-        binding.btnDetailLocation.setOnClickListener {
-            // TODO: buka full map activity
         }
         binding.btnFullMap.setOnClickListener {
             binding.mapView.controller.setZoom(17.0)
