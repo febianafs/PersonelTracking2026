@@ -4,12 +4,6 @@ import com.example.personeltracking2026.core.network.RetrofitClient
 import com.example.personeltracking2026.data.model.LoginRequest
 import com.example.personeltracking2026.data.model.LoginResponse
 
-sealed class Result<out T> {
-    data class Success<T>(val data: T) : Result<T>()
-    data class Error(val message: String) : Result<Nothing>()
-    object Loading : Result<Nothing>()
-}
-
 class LoginRepository {
     private val api = RetrofitClient.instance
 

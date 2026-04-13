@@ -85,12 +85,12 @@ class AboutActivity : BaseActivity() {
                             binding.scrollView.visibility = View.VISIBLE
 
                             val data = state.data.data
-                            binding.tvAppName.text = data?.app_name ?: "-"
-                            binding.tvAppCode.text = data?.app_code ?: "-"
-                            binding.tvDev.text = data?.dev ?: "-"
-                            binding.tvCompany.text = data?.company_name ?: "-"
-                            binding.tvCopyright.text = data?.copyright_text ?: "-"
-                            binding.tvLegalNotice.text = data?.legal_notice ?: "-"
+                            binding.tvAppName.text = data?.app_name ?: "Personel Tracking"
+                            binding.tvAppCode.text = data?.app_code ?: "PT-2026"
+                            binding.tvDev.text = data?.dev ?: "RTI Dev"
+                            binding.tvCompany.text = data?.company_name ?: "PT.DHARMAPALA AGUNG SEJAHTERA"
+                            binding.tvCopyright.text = data?.copyright_text ?: "©2026"
+                            binding.tvLegalNotice.text = data?.legal_notice ?: "All rights reserved"
 
                             val privacyUrl = data?.privacy_policy_url
                             if (!privacyUrl.isNullOrEmpty()) {

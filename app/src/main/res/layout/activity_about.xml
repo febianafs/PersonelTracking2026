@@ -113,12 +113,12 @@
                     android:padding="24dp"
                     android:background="@drawable/bg_card_gradient">
 
-                    <ImageView
-                        android:id="@+id/imgLogo"
-                        android:layout_width="72dp"
-                        android:layout_height="72dp"
-                        android:src="@drawable/ic_logo_polri"
-                        android:contentDescription="App Logo" />
+<!--                    <ImageView-->
+<!--                        android:id="@+id/imgLogo"-->
+<!--                        android:layout_width="72dp"-->
+<!--                        android:layout_height="72dp"-->
+<!--                        android:src="@drawable/ic_logo_polri"-->
+<!--                        android:contentDescription="App Logo" />-->
 
                     <TextView
                         android:id="@+id/tvAppName"

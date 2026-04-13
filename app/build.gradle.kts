@@ -37,6 +37,15 @@ android {
         viewBinding = true
         buildConfig = true
     }
+    packaging {
+        resources {
+            // pilih salah satu file META-INF saat ada duplikasi (lebih ringkas daripada daftarin satu-satu)
+            pickFirsts += setOf(
+                "META-INF/*",
+                "META-INF/**"
+            )
+        }
+    }
 }
 
 dependencies {
@@ -73,7 +82,11 @@ dependencies {
     // LOCATION
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
+    //STREAM
     implementation("com.github.pedroSG94.RootEncoder:library:2.4.5")
+
+    // MQTT
+    implementation("com.hivemq:hivemq-mqtt-client:1.3.3")
 
     // TEST
     testImplementation(libs.junit)
