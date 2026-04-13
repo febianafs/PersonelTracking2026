@@ -55,8 +55,9 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
     private var originalMargins: ViewGroup.MarginLayoutParams? = null
     private lateinit var sessionManager: SessionManager
 
+    // Stream resolution option
     companion object {
-        //const val RTMP_URL = "rtmp://147.139.161.159:22935/personel"
+        val RESOLUTION_LD = Pair(640, 360)
         val RESOLUTION_SD = Pair(854, 480)
         val RESOLUTION_HD = Pair(1280, 720)
     }
@@ -308,13 +309,13 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
         try {
             // SARAN 7: bungkus dengan try-catch
             val prepared = rtmpCamera.prepareAudio(
-                128 * 1024,
-                44100,
-                true
+                96 * 1024,
+                16000,
+                false
             ) && rtmpCamera.prepareVideo(
                 res.second,
                 res.first,
-                24,
+                30,
                 videoBitrate,
                 CameraHelper.getCameraOrientation(this)
             )
