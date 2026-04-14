@@ -8,6 +8,8 @@ import android.content.res.Configuration
 import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.util.Rational
 import android.view.View
@@ -321,7 +323,10 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
             )
 
             if (prepared) {
-                rtmpCamera.startStream(url)
+                //rtmpCamera.startStream(url)
+                Handler(Looper.getMainLooper()).postDelayed({
+                    rtmpCamera.startStream(url)
+                }, 400)
             } else {
                 Toast.makeText(this, "Gagal mempersiapkan stream", Toast.LENGTH_SHORT).show()
                 viewModel.stopStream()
