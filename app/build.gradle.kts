@@ -88,6 +88,20 @@ dependencies {
     // MQTT
     implementation("com.hivemq:hivemq-mqtt-client:1.3.3")
 
+    // --- Netty BOM: kunci versi semua modul Netty biar konsisten ---
+    implementation(platform("io.netty:netty-bom:4.1.111.Final"))
+    // --- Modul yang dibutuhin WebSocket HiveMQ (HTTP + handler) ---
+    implementation("io.netty:netty-codec-http")
+    implementation("io.netty:netty-handler")
+    implementation("io.netty:netty-transport")
+    implementation("io.netty:netty-buffer")
+
+    //room database
+    implementation("androidx.room:room-runtime:2.8.4")
+
+    //WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
+
     // TEST
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

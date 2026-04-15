@@ -35,7 +35,6 @@
             android:textColor="@color/white"
             android:textSize="12sp"
             android:layout_marginStart="8dp" />
-
     </LinearLayout>
 
     <!-- CONTENT ROW -->
@@ -48,7 +47,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- KIRI — branding -->
+        <!-- KIRI -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
@@ -63,8 +62,7 @@
                 android:layout_height="120dp"
                 android:src="@drawable/img_planet"
                 android:scaleType="fitCenter"
-                android:alpha="0.9"
-                android:adjustViewBounds="true" />
+                android:alpha="0.9" />
 
             <TextView
                 android:id="@+id/txtTagline"
@@ -87,19 +85,19 @@
 
         </LinearLayout>
 
-        <!-- KANAN — form login -->
+        <!-- KANAN -->
         <androidx.core.widget.NestedScrollView
             android:id="@+id/scrollView"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:fillViewport="true"
-            android:clipToPadding="false"
             android:overScrollMode="never">
 
+            <!-- 🔥 INI YANG DIPERBAIKI -->
             <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="match_parent"
                 android:minHeight="300dp"
                 android:paddingHorizontal="16dp"
                 android:paddingVertical="12dp">
@@ -130,14 +128,13 @@
                             android:src="@drawable/bg_toolbar_stripes"
                             android:scaleType="fitXY" />
 
-                        <!-- KONTEN CARD -->
+                        <!-- CONTENT -->
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:orientation="vertical"
                             android:padding="16dp">
 
-                            <!-- TITLE -->
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
@@ -148,7 +145,6 @@
                                 android:layout_gravity="center"
                                 android:layout_marginBottom="12dp" />
 
-                            <!-- EMAIL -->
                             <com.google.android.material.textfield.TextInputLayout
                                 android:id="@+id/tilUsername"
                                 android:layout_width="match_parent"
@@ -164,12 +160,9 @@
                                     android:layout_height="wrap_content"
                                     android:hint="Username/Email"
                                     android:textColor="@color/white"
-                                    android:textColorHint="@color/white"
-                                    android:inputType="text" />
-
+                                    android:textColorHint="@color/white" />
                             </com.google.android.material.textfield.TextInputLayout>
 
-                            <!-- PASSWORD -->
                             <com.google.android.material.textfield.TextInputLayout
                                 android:id="@+id/tilPassword"
                                 android:layout_width="match_parent"
@@ -189,10 +182,8 @@
                                     android:textColor="@color/white"
                                     android:textColorHint="@color/white"
                                     android:inputType="textPassword" />
-
                             </com.google.android.material.textfield.TextInputLayout>
 
-                            <!-- LOGIN BUTTON -->
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnLogin"
                                 android:layout_width="match_parent"

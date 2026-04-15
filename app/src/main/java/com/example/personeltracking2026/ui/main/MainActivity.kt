@@ -58,7 +58,6 @@ class MainActivity : AppCompatActivity() {
         binding.layoutContent.visibility = View.VISIBLE
 
         val chartAnim = AnimationUtils.loadAnimation(this, R.anim.chart_enter)
-        binding.imgChart.startAnimation(chartAnim)
 
         binding.cardPersonel.setOnClickListener {
             animateCardSelect(isPersonel = true)
@@ -122,14 +121,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        if (::binding.isInitialized) binding.imgChart.clearAnimation()
     }
 
     override fun onResume() {
         super.onResume()
         if (::binding.isInitialized && binding.layoutContent.visibility == View.VISIBLE) {
             val chartAnim = AnimationUtils.loadAnimation(this, R.anim.chart_enter)
-            binding.imgChart.startAnimation(chartAnim)
         }
     }
 }

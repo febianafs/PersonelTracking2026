@@ -9,7 +9,7 @@
     android:background="@color/background2"
     tools:context=".ui.main.MainActivity">
 
-    <!-- LOADING BANNER — kecil di atas -->
+    <!-- LOADING BANNER -->
     <LinearLayout
         android:id="@+id/layoutLoading"
         android:layout_width="0dp"
@@ -36,45 +36,40 @@
             android:textColor="@color/white"
             android:textSize="12sp"
             android:layout_marginStart="8dp" />
-
     </LinearLayout>
 
-    <!-- CONTENT — ID diganti dari scrollView ke layoutContent -->
+    <!-- STRIPES DI ATAS -->
+    <ImageView
+        android:id="@+id/imgStripes"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:src="@drawable/bg_toolbar_stripes"
+        android:scaleType="fitXY"
+        app:layout_constraintTop_toBottomOf="@id/layoutLoading"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHeight_min="40dp"
+        app:layout_constraintHeight_max="80dp" />
+
+    <!-- CONTENT -->
     <androidx.core.widget.NestedScrollView
         android:id="@+id/layoutContent"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:fillViewport="true"
-        android:clipToPadding="false"
         android:overScrollMode="never"
         android:visibility="gone"
         tools:visibility="visible"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/imgStripes"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="500dp">
+            android:layout_height="match_parent">
 
-            <!-- STRIPES TOP -->
-            <ImageView
-                android:id="@+id/imgStripes"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:src="@drawable/bg_toolbar_stripes"
-                android:scaleType="fitXY"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintBottom_toTopOf="@id/layoutRole"
-                app:layout_constraintHeight_min="40dp"
-                app:layout_constraintHeight_max="80dp"
-                app:layout_constraintVertical_weight="1" />
-
-            <!-- ROLE SELECTION -->
+            <!-- ROLE (CENTER) -->
             <LinearLayout
                 android:id="@+id/layoutRole"
                 android:layout_width="0dp"
@@ -83,8 +78,8 @@
                 android:gravity="center"
                 android:paddingHorizontal="24dp"
                 android:paddingVertical="24dp"
-                app:layout_constraintTop_toBottomOf="@id/imgStripes"
-                app:layout_constraintBottom_toTopOf="@id/imgChart"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintVertical_bias="0.5">
@@ -113,6 +108,7 @@
                     android:orientation="horizontal"
                     android:weightSum="2">
 
+                    <!-- PERSONEL -->
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/cardPersonel"
                         android:layout_width="0dp"
@@ -134,14 +130,12 @@
                             android:paddingHorizontal="12dp">
 
                             <ImageView
-                                android:id="@+id/iconPersonel"
                                 android:layout_width="36dp"
                                 android:layout_height="36dp"
                                 android:src="@drawable/ic_person"
                                 app:tint="@color/white" />
 
                             <TextView
-                                android:id="@+id/txtPersonel"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Personel"
@@ -153,7 +147,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Personel Tracking Access"
+                                android:text="Personel Access"
                                 android:textColor="@color/gray"
                                 android:textSize="11sp"
                                 android:gravity="center"
@@ -163,6 +157,7 @@
 
                     </com.google.android.material.card.MaterialCardView>
 
+                    <!-- BODYCAM -->
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/cardBodycam"
                         android:layout_width="0dp"
@@ -184,14 +179,12 @@
                             android:paddingHorizontal="12dp">
 
                             <ImageView
-                                android:id="@+id/iconBodycam"
                                 android:layout_width="36dp"
                                 android:layout_height="36dp"
                                 android:src="@drawable/ic_bodycam"
                                 app:tint="@color/white" />
 
                             <TextView
-                                android:id="@+id/txtBodycam"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Bodycam"
@@ -216,22 +209,6 @@
                 </LinearLayout>
 
             </LinearLayout>
-
-            <!-- CHART BOTTOM -->
-            <ImageView
-                android:id="@+id/imgChart"
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:src="@drawable/img_chart"
-                android:scaleType="fitXY"
-                android:alpha="0.6"
-                app:layout_constraintTop_toBottomOf="@id/layoutRole"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintHeight_min="60dp"
-                app:layout_constraintHeight_max="120dp"
-                app:layout_constraintVertical_weight="1" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 

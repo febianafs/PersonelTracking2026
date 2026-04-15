@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -19,6 +20,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.base.BaseActivity
 import com.example.personeltracking2026.core.map.MapTypeManager
+import com.example.personeltracking2026.core.mqtt.MqttReconnectManager
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.data.model.PersonelData
 import com.example.personeltracking2026.data.repository.LocationRepository
@@ -36,6 +38,7 @@ class PersonelActivity : BaseActivity() {
     private lateinit var binding: ActivityPersonelBinding
     private lateinit var mqttPrefs: SharedPreferences
     private lateinit var sessionManager: SessionManager
+    private lateinit var reconnectManager: MqttReconnectManager
 
     private val viewModel: PersonelViewModel by viewModels {
         PersonelViewModel.Factory(
@@ -61,8 +64,26 @@ class PersonelActivity : BaseActivity() {
     ) { permissions ->
         val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (granted) startLocationUpdates()
+        if (granted) {
+            startLocationUpdates()
+            requestBackgroundLocation()
+        }
         else Toast.makeText(this, "Location permission required", Toast.LENGTH_LONG).show()
+    }
+
+    private fun requestBackgroundLocation() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val granted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (!granted) {
+                locationPermissionRequest.launch(
+                    arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                )
+            }
+        }
     }
 
     // ─── LIFECYCLE ───────────────────────────────────────────────────────────
@@ -81,6 +102,8 @@ class PersonelActivity : BaseActivity() {
 
         binding.btnOverflow.setOnClickListener { showOverflowMenu(it) }
 
+        reconnectManager = MqttReconnectManager(this, viewModel.mqttManager)
+
         setupMap()
         setupVitalSignsInitial()
         loadIntervalFromSettings()
@@ -94,12 +117,18 @@ class PersonelActivity : BaseActivity() {
     // FIX ANR: register battery receiver di onStart, bukan di ViewModel.init{}
     override fun onStart() {
         super.onStart()
+
+        reconnectManager.start()
+
         viewModel.registerBatteryReceiver(this)
     }
 
     // FIX ANR: unregister battery receiver di onStop
     override fun onStop() {
         super.onStop()
+
+        reconnectManager.stop()
+
         viewModel.unregisterBatteryReceiver(this)
     }
 
