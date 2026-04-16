@@ -97,7 +97,6 @@ class LoginActivity : AppCompatActivity() {
         val heightInch = displayMetrics.heightPixels / displayMetrics.ydpi
         val screenInch = Math.sqrt((widthInch * widthInch + heightInch * heightInch).toDouble())
         if (screenInch <= 5.0) {
-            binding.imgChart.visibility = View.GONE
             binding.txtTagline.visibility = View.GONE
         }
         if (screenInch <= 4.0) {

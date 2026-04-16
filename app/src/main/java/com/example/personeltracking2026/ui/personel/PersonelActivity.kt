@@ -5,9 +5,8 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,6 +20,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.base.BaseActivity
 import com.example.personeltracking2026.core.map.MapTypeManager
+import com.example.personeltracking2026.core.mqtt.MqttReconnectManager
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.data.model.PersonelData
 import com.example.personeltracking2026.data.repository.LocationRepository
@@ -49,6 +49,7 @@ class PersonelActivity : BaseActivity() {
     private lateinit var sessionManager: SessionManager
     private lateinit var mapView: MapView
     private lateinit var pagerAdapter: TopPagerAdapter
+    private lateinit var reconnectManager: MqttReconnectManager
 
     private val viewModel: PersonelViewModel by viewModels {
         PersonelViewModel.Factory(
@@ -59,8 +60,6 @@ class PersonelActivity : BaseActivity() {
         )
     }
 
-//    private val handler = Handler(Looper.getMainLooper())
-//    private lateinit var syncRunnable: Runnable
 
     private val zoneCenterLat    = -7.868729
     private val zoneCenterLon    = 105.643117
@@ -77,8 +76,26 @@ class PersonelActivity : BaseActivity() {
     ) { permissions ->
         val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (granted) startLocationUpdates()
+        if (granted) {
+            startLocationUpdates()
+            requestBackgroundLocation()
+        }
         else Toast.makeText(this, "Location permission required", Toast.LENGTH_LONG).show()
+    }
+
+    private fun requestBackgroundLocation() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val granted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (!granted) {
+                locationPermissionRequest.launch(
+                    arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                )
+            }
+        }
     }
 
     // ─── LIFECYCLE ───────────────────────────────────────────────────────────
@@ -114,6 +131,8 @@ class PersonelActivity : BaseActivity() {
 
         binding.btnOverflow.setOnClickListener { showOverflowMenu(it) }
 
+        reconnectManager = MqttReconnectManager(this, viewModel.mqttManager)
+
         setupMap()
 
         binding.btnZoomIn.setOnClickListener {
@@ -139,6 +158,9 @@ class PersonelActivity : BaseActivity() {
     // FIX ANR: register battery receiver di onStart, bukan di ViewModel.init{}
     override fun onStart() {
         super.onStart()
+
+        reconnectManager.start()
+
         viewModel.registerBatteryReceiver(this)
         binding.mapView.onStart()
     }
@@ -146,6 +168,9 @@ class PersonelActivity : BaseActivity() {
     // FIX ANR: unregister battery receiver di onStop
     override fun onStop() {
         super.onStop()
+
+        reconnectManager.stop()
+
         viewModel.unregisterBatteryReceiver(this)
         binding.mapView.onStop()
     }
@@ -462,22 +487,6 @@ class PersonelActivity : BaseActivity() {
         }
     }
 
-    private fun isInsideZone(
-        lat1: Double,
-        lon1: Double,
-        lat2: Double,
-        lon2: Double,
-        radius: Double
-    ): Boolean {
-        val results = FloatArray(1)
-        android.location.Location.distanceBetween(
-            lat1, lon1,
-            lat2, lon2,
-            results
-        )
-        return results[0] <= radius
-    }
-
     // ─── VITAL SIGNS UI ──────────────────────────────────────────────────────
 
     private fun setupVitalSignsInitial() {
@@ -502,9 +511,7 @@ class PersonelActivity : BaseActivity() {
     // ─── CLICK LISTENERS ─────────────────────────────────────────────────────
 
     private fun setupClickListeners() {
-//        binding.btnDataSelengkapnya.setOnClickListener {
-//            // TODO: buka bottom sheet data lengkap
-//        }
+
         binding.btnFullMap.setOnClickListener {
             val intent = Intent(this, FullscreenMapActivity::class.java)
             intent.putExtra("lat", currentLat)

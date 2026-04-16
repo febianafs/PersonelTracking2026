@@ -28,29 +28,29 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class LocationState(
-    val data: LocationData? = null,
-    val gpsStrength: Int = 0,
-    val isInZone: Boolean = false,
-    val error: String? = null
+    val data       : LocationData? = null,
+    val gpsStrength: Int           = 0,
+    val isInZone   : Boolean       = false,
+    val error      : String?       = null
 )
 
 data class BatteryState(
-    val percent: Int = 0,
+    val percent   : Int     = 0,
     val isCharging: Boolean = false
 )
 
 data class HeartRateState(
-    val bpm: Int = 0,
-    val timestamp: Long = 0L,
+    val bpm        : Int     = 0,
+    val timestamp  : Long    = 0L,
     val isConnected: Boolean = false,
-    val deviceName: String = ""
+    val deviceName : String  = ""
 )
 
 class PersonelViewModel(
-    application: Application,
-    private val repository: PersonelRepository,
+    application           : Application,
+    private val repository        : PersonelRepository,
     private val locationRepository: LocationRepository,
-    private val sessionManager: SessionManager
+    private val sessionManager    : SessionManager
 ) : AndroidViewModel(application) {
 
     companion object {
@@ -59,52 +59,57 @@ class PersonelViewModel(
         private const val ZONE_RADIUS_METERS = 500.0
     }
 
+    // ─── STATE FLOWS ─────────────────────────────────────────────────────────
+
     private val _personelState  = MutableStateFlow<PersonelState>(PersonelState.Loading)
-    val personelState: StateFlow<PersonelState> = _personelState
+    val personelState : StateFlow<PersonelState> = _personelState
 
     private val _locationState  = MutableStateFlow(LocationState())
-    val locationState: StateFlow<LocationState> = _locationState.asStateFlow()
+    val locationState : StateFlow<LocationState> = _locationState.asStateFlow()
 
     private val _batteryState   = MutableStateFlow(BatteryState())
-    val batteryState: StateFlow<BatteryState> = _batteryState.asStateFlow()
+    val batteryState  : StateFlow<BatteryState> = _batteryState.asStateFlow()
 
     private val _mqttConnected  = MutableStateFlow(false)
-    val mqttConnected: StateFlow<Boolean> = _mqttConnected.asStateFlow()
+    val mqttConnected : StateFlow<Boolean> = _mqttConnected.asStateFlow()
 
     private val _lastSyncTime   = MutableStateFlow(System.currentTimeMillis())
-    val lastSyncTime: StateFlow<Long> = _lastSyncTime.asStateFlow()
+    val lastSyncTime  : StateFlow<Long> = _lastSyncTime.asStateFlow()
 
     private val _heartRateState = MutableStateFlow(HeartRateState())
     val heartRateState: StateFlow<HeartRateState> = _heartRateState.asStateFlow()
 
-    val mqttManager = MqttManager().apply {
+    // ─── MQTT ────────────────────────────────────────────────────────────────
+
+    // FIX: MqttManager butuh context — pakai application context
+    val mqttManager = MqttManager(application).apply {
         onConnected      = { _mqttConnected.value = true }
         onDisconnected   = { _mqttConnected.value = false }
         onPublishSuccess = { _ -> _lastSyncTime.value = System.currentTimeMillis() }
     }
 
-    // FIX ANR: battery receiver tidak lagi register di init{}
-    // Didaftarkan dari Activity lewat fungsi registerBattery()
+    // ─── BATTERY RECEIVER ────────────────────────────────────────────────────
+
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            // FIX ANR: refreshBattery di IO thread, bukan main thread
             viewModelScope.launch(Dispatchers.IO) { refreshBattery() }
         }
     }
 
     init {
-        // FIX ANR: tidak ada operasi blocking di init{}
-        // MQTT connect sudah pakai Dispatchers.IO di dalam MqttManager.connect()
         mqttManager.connect()
-
-        // FIX ANR: battery dibaca di IO thread
         viewModelScope.launch(Dispatchers.IO) { refreshBattery() }
     }
 
+    override fun onCleared() {
+        super.onCleared()
+        mqttManager.disconnect()
+    }
+
+    // ─── BATTERY RECEIVER LIFECYCLE ──────────────────────────────────────────
+
     /**
-     * Dipanggil dari Activity.onStart() untuk register broadcast receiver.
-     * Receiver HARUS didaftarkan dari Activity/main thread, tapi callback-nya
-     * kita lempar ke IO thread.
+     * Dipanggil dari Activity.onStart()
      */
     fun registerBatteryReceiver(context: Context) {
         context.registerReceiver(
@@ -113,20 +118,17 @@ class PersonelViewModel(
         )
     }
 
+    /**
+     * Dipanggil dari Activity.onStop()
+     */
     fun unregisterBatteryReceiver(context: Context) {
         try { context.unregisterReceiver(batteryReceiver) }
-        catch (e: Exception) { /* ignore jika belum terdaftar */ }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        mqttManager.disconnect()
+        catch (e: Exception) { /* abaikan jika belum terdaftar */ }
     }
 
     // ─── PERSONEL ────────────────────────────────────────────────────────────
 
     fun loadPersonelDetail(userId: Int, token: String) {
-        // Sudah di viewModelScope, tapi tambahkan Dispatchers.IO eksplisit
         viewModelScope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) {
                 _personelState.value = PersonelState.Loading
@@ -134,6 +136,7 @@ class PersonelViewModel(
             when (val result = repository.getPersonelDetail(userId, token)) {
                 is Result.Success -> {
                     val data = result.data
+                    // Simpan detail ke session supaya tersedia meski API gagal berikutnya
                     sessionManager.savePersonelDetail(
                         rank      = data.rank?.name,
                         unit      = data.unit?.name,
@@ -167,7 +170,6 @@ class PersonelViewModel(
                         gpsStrength = accuracyToStrength(locationData.accuracy),
                         isInZone    = checkInZone(locationData.lat, locationData.lon)
                     )
-                    // Publish di IO thread agar tidak block UI
                     viewModelScope.launch(Dispatchers.IO) {
                         publishDataPayload(locationData)
                     }
@@ -190,20 +192,21 @@ class PersonelViewModel(
         val bat = _batteryState.value
 
         val payload = MqttPayloadBuilder.buildDataPayload(
-            session       = sessionManager,
-            serialNumber  = serialNumber,
-            lat           = location.lat,
-            lon           = location.lon,
-            gpsTimestamp  = location.timestamp,
-            heartrate     = hr.bpm,
-            heartrateTs   = if (hr.timestamp > 0) hr.timestamp else System.currentTimeMillis(),
-            batteryLevel  = bat.percent
+            session      = sessionManager,
+            serialNumber = serialNumber,
+            lat          = location.lat,
+            lon          = location.lon,
+            gpsTimestamp = location.timestamp,
+            heartrate    = hr.bpm,
+            heartrateTs  = if (hr.timestamp > 0) hr.timestamp else System.currentTimeMillis(),
+            batteryLevel = bat.percent
         )
         mqttManager.publishData(payload)
     }
 
     fun publishSos() {
         val loc = _locationState.value.data ?: return
+
         val serialNumber = Settings.Secure.getString(
             getApplication<Application>().contentResolver,
             Settings.Secure.ANDROID_ID
@@ -218,7 +221,7 @@ class PersonelViewModel(
         mqttManager.publishSos(payload)
     }
 
-    // ─── HEART RATE (BLE) ─────────────────────────────────────────────────────
+    // ─── HEART RATE (BLE) ────────────────────────────────────────────────────
 
     fun updateHeartRate(bpm: Int, deviceName: String = "") {
         _heartRateState.update {
@@ -240,7 +243,6 @@ class PersonelViewModel(
 
     // ─── BATTERY ─────────────────────────────────────────────────────────────
 
-    // ✅ FIX ANR: suspend fun, dipanggil dari coroutine IO
     suspend fun refreshBattery() = withContext(Dispatchers.IO) {
         val bm = getApplication<Application>()
             .getSystemService(Context.BATTERY_SERVICE) as BatteryManager
@@ -255,7 +257,9 @@ class PersonelViewModel(
 
     // ─── LEGACY ──────────────────────────────────────────────────────────────
 
-    fun onMqttPublishSuccess() { _lastSyncTime.value = System.currentTimeMillis() }
+    fun onMqttPublishSuccess() {
+        _lastSyncTime.value = System.currentTimeMillis()
+    }
 
     // ─── HELPERS ─────────────────────────────────────────────────────────────
 
@@ -278,10 +282,10 @@ class PersonelViewModel(
     // ─── FACTORY ─────────────────────────────────────────────────────────────
 
     class Factory(
-        private val application: Application,
-        private val repository: PersonelRepository,
+        private val application       : Application,
+        private val repository        : PersonelRepository,
         private val locationRepository: LocationRepository,
-        private val sessionManager: SessionManager
+        private val sessionManager    : SessionManager
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
