@@ -19,110 +19,197 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.TimeUnit
-import kotlin.math.pow
 
 class MqttManager(private val context: Context) {
-    private val gson = Gson()
-    private val scope = CoroutineScope(Dispatchers.IO)
 
     lateinit var queueManager: MqttQueueManager
-    private var client: Mqtt3AsyncClient? = null
-
-    private var isConnecting = false
-
-    private var reconnectAttempts = 0
-
-    var onPublishFailed: ((String, String) -> Unit)? = null
 
     init {
         queueManager = MqttQueueManager(context)
     }
 
+    companion object {
+        private const val TAG            = "MqttManager"
+        const val TOPIC_DATA             = "radio/data"
+        const val TOPIC_SOS              = "radio/sos"
+        const val QOS_DATA               = 1
+        const val QOS_SOS                = 2
+        private const val MAX_RETRY      = 5
+        private const val RETRY_DELAY_MS = 5_000L
+    }
+
+    var onConnected      : (() -> Unit)?                                = null
+    var onDisconnected   : (() -> Unit)?                                = null
+    var onPublishSuccess : ((topic: String) -> Unit)?                   = null
+    var onPublishFailed  : ((topic: String, reason: String) -> Unit)?   = null
+
+    private val gson  = Gson()
+    private val scope = CoroutineScope(Dispatchers.IO)
+
+    private var client             : Mqtt3AsyncClient? = null
+    private var retryJob           : Job?              = null
+    private var retryCount                             = 0
+    private var isIntentionallyStopped                 = false
+
+    // ─── PUBLIC ──────────────────────────────────────────────────────────────
+
     fun connect() {
-        isConnecting = false
+        isIntentionallyStopped = false
+        retryCount = 0
         scope.launch { doConnect() }
     }
 
-    private fun doConnect() {
-        // Jika sudah dalam proses koneksi, skip
-        if (isConnecting) {
-            Log.d("MQTT", "Already connecting, skip")
-            return
+    fun disconnect() {
+        isIntentionallyStopped = true
+        retryJob?.cancel()
+        scope.launch {
+            try {
+                client?.disconnect()
+                MqttLogger.connect(null, false)
+            } catch (e: Exception) {
+                MqttLogger.error("Disconnect error: ${e.message}")
+            }
         }
+    }
 
-        isConnecting = true
+    /**
+     * Dipanggil setelah user Save settings baru di SettingsActivity.
+     * Disconnect dari broker lama, reconnect dengan config terbaru.
+     */
+    fun reconnectWithNewSettings() {
+        isIntentionallyStopped = true
+        retryJob?.cancel()
+        scope.launch {
+            try { client?.disconnect() } catch (e: Exception) { /* ignore */ }
+            delay(500)
+            isIntentionallyStopped = false
+            retryCount = 0
+            doConnect()
+        }
+    }
 
+    fun publishDirect(topic: String, payload: String) {
+
+        client?.publishWith()
+            ?.topic(topic)
+            ?.payload(payload.toByteArray())
+            ?.send()
+
+        MqttLogger.publish(topic, payload)
+    }
+
+    fun isConnected(): Boolean = client?.state?.isConnected == true
+
+    fun publishData(payload: RadioDataPayload) {
+        scope.launch { publish(TOPIC_DATA, gson.toJson(payload), QOS_DATA) }
+    }
+
+    fun publishSos(payload: RadioSosPayload) {
+        scope.launch { publish(TOPIC_SOS, gson.toJson(payload), QOS_SOS) }
+    }
+
+    // ─── INTERNAL ────────────────────────────────────────────────────────────
+
+    private fun doConnect() {
+        // Selalu baca config terbaru dari MqttConfigManager — bukan dari prefs langsung
         val config = MqttConfigManager(context).load()
-        val builder = Mqtt3Client.builder()
-            .identifier("client-${System.currentTimeMillis()}")
-            .serverHost(config.host)
-            .serverPort(if (config.useWebSocket) config.wsPort else config.tcpPort)
+        val host   = config.host
+        val port   = if (config.useWebSocket) config.wsPort else config.tcpPort
+        val user   = config.username
+        val pass   = config.password
 
+        val clientId = "android_${Build.MODEL}_${System.currentTimeMillis()}"
+            .replace(" ", "_")
+            .take(23)
+
+        val builder = Mqtt3Client.builder()
+            .identifier(clientId)
+            .serverHost(host)
+            .serverPort(port)
+
+        // WebSocket hanya kalau dipakai
         if (config.useWebSocket) {
             builder.webSocketConfig()
                 .serverPath("/")
                 .applyWebSocketConfig()
         }
 
+        // Authentication
         builder.simpleAuth()
-            .username(config.username)
-            .password(config.password.toByteArray())
+            .username(user)
+            .password(pass.toByteArray(StandardCharsets.UTF_8))
             .applySimpleAuth()
 
+        // Build client
         client = builder.buildAsync()
 
-        try {
-            val connAck = client!!.connectWith()
-                .cleanSession(true)
-                .keepAlive(20)
-                .send()
-                .get(10, TimeUnit.SECONDS)
+        client?.connect()
+            ?.whenComplete { connAck: Mqtt3ConnAck?, throwable: Throwable? ->
+                if (throwable != null) {
+                    MqttLogger.error("Connect failed: ${throwable.message}")
+                    onDisconnected?.invoke()
+                    if (!isIntentionallyStopped) scheduleRetry()
+                    return@whenComplete
+                }
+                if (connAck?.returnCode == Mqtt3ConnAckReturnCode.SUCCESS) {
+                    val protocol = if (config.useWebSocket) "ws" else "tcp"
+                    MqttLogger.connect("$protocol://$host:$port", retryCount > 0)
+                    retryCount = 0
+                    onConnected?.invoke()
 
-            if (connAck != null) {
-                Log.d("MQTT", "Connected")
-                reconnectAttempts = 0 // Reset attempts after success
-                scope.launch {
-                    queueManager.flush(this@MqttManager) // Flush queue jika koneksi berhasil
+                    scope.launch {
+                        queueManager.flush(this@MqttManager)
+                    }
+                } else {
+                    MqttLogger.error("Connect rejected: ${connAck?.returnCode}")
+                    onDisconnected?.invoke()
+                    if (!isIntentionallyStopped) scheduleRetry()
                 }
             }
-
-        } catch (e: Exception) {
-            Log.e("MQTT", "Connect failed: ${e.message}")
-
-            // Retry mechanism with exponential backoff
-            reconnectAttempts++
-            if (reconnectAttempts < 5) {
-                val delayTime = 2.0.pow(reconnectAttempts.toDouble()).toLong()
-                Log.d("MQTT", "Retrying in $delayTime seconds")
-                Thread.sleep(delayTime * 1000)  // Delay in seconds
-                doConnect() // Retry connect after delay
-            } else {
-                Log.e("MQTT", "Max reconnect attempts reached")
-            }
-        } finally {
-            isConnecting = false  // Always reset flag after attempt (even if it fails)
-        }
     }
 
-    fun publish(topic: String, json: String) {
-        if (client != null && client!!.state.isConnected) {
-            client?.publishWith()
-                ?.topic(topic)
-                ?.payload(json.toByteArray())
-                ?.send()
+    private fun publish(topic: String, json: String, qos: Int) {
+        if (!isConnected()) {
 
-            MqttLogger.publish(topic, json)
-        } else {
-            // Simpan data yang gagal dipublish ke queue (Room)
             scope.launch {
                 queueManager.save(topic, json)
             }
 
             Log.d("MQTT_QUEUE", "Saved to queue DB")
-            onPublishFailed?.invoke(topic, "Queued (offline)")  // Inform UI or callback
+            onPublishFailed?.invoke(topic, "Queued (offline)")
+            return
         }
+        val mqttQos = if (qos >= 2) MqttQos.EXACTLY_ONCE else MqttQos.AT_LEAST_ONCE
+
+        client?.publishWith()
+            ?.topic(topic)
+            ?.qos(mqttQos)
+            ?.payload(json.toByteArray(StandardCharsets.UTF_8))
+            ?.retain(false)
+            ?.send()
+            ?.whenComplete { _, throwable ->
+                if (throwable != null) {
+                    MqttLogger.error("Publish failed ($topic): ${throwable.message}")
+                    onPublishFailed?.invoke(topic, throwable.message ?: "Unknown error")
+                } else {
+                    MqttLogger.publish(topic, json)
+                    onPublishSuccess?.invoke(topic)
+                }
+            }
     }
 
-    fun isConnected(): Boolean = client?.state?.isConnected == true
+    private fun scheduleRetry() {
+        if (retryCount >= MAX_RETRY) {
+            MqttLogger.error("Max retry reached ($MAX_RETRY). Giving up.")
+            return
+        }
+        retryJob?.cancel()
+        retryJob = scope.launch {
+            retryCount++
+            val delayMs = RETRY_DELAY_MS * retryCount
+            Log.i(TAG, "Retry #$retryCount in ${delayMs / 1000}s...")
+            delay(delayMs)
+            if (!isIntentionallyStopped) doConnect()
+        }
+    }
 }
