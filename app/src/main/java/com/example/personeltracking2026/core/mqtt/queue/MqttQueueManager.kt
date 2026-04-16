@@ -7,7 +7,17 @@ class MqttQueueManager(context: Context) {
 
     private val dao = MqttDatabase.getInstance(context).mqttDao()
 
+    private val MAX_QUEUE_SIZE = 200
+
     suspend fun save(topic: String, payload: String) {
+
+        val currentSize = dao.count()
+
+        // 🔥 LIMIT QUEUE
+        if (currentSize >= MAX_QUEUE_SIZE) {
+            dao.deleteOldest()
+        }
+
         dao.insert(
             MqttMessageEntity(
                 topic = topic,

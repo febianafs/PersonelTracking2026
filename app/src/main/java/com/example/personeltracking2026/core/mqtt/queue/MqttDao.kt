@@ -13,4 +13,10 @@ interface MqttDao {
 
     @Query("DELETE FROM mqtt_queue")
     suspend fun clear()
+
+    @Query("SELECT COUNT(*) FROM mqtt_queue")
+    suspend fun count(): Int
+
+    @Query("DELETE FROM mqtt_queue WHERE id IN (SELECT id FROM mqtt_queue ORDER BY id ASC LIMIT 1)")
+    suspend fun deleteOldest()
 }
