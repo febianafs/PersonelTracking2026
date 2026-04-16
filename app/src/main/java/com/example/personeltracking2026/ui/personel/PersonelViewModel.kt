@@ -20,6 +20,8 @@ import com.example.personeltracking2026.data.repository.LocationRepository
 import com.example.personeltracking2026.data.repository.PersonelRepository
 import com.example.personeltracking2026.data.repository.Result
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,6 +60,10 @@ class PersonelViewModel(
         private const val ZONE_CENTER_LON    = 105.643117
         private const val ZONE_RADIUS_METERS = 500.0
     }
+
+    private var locationJob: Job? = null
+    private var lastLocation: LocationData? = null
+    private var publishJob: Job? = null
 
     // ─── STATE FLOWS ─────────────────────────────────────────────────────────
 
@@ -159,23 +165,43 @@ class PersonelViewModel(
     // ─── LOCATION & MQTT PUBLISH ─────────────────────────────────────────────
 
     fun startLocationUpdates(intervalMs: Long = 5000L) {
-        viewModelScope.launch {
+        locationJob?.cancel()
+
+        locationJob = viewModelScope.launch {
             locationRepository.getLocationFlow(intervalMs).collect { kotlinResult ->
                 val locationData = kotlinResult.getOrNull()
                 val error        = kotlinResult.exceptionOrNull()
 
                 if (locationData != null) {
+                    // Simpan last location
+                    lastLocation = locationData
+
                     _locationState.value = LocationState(
                         data        = locationData,
                         gpsStrength = accuracyToStrength(locationData.accuracy),
                         isInZone    = checkInZone(locationData.lat, locationData.lon)
                     )
-                    viewModelScope.launch(Dispatchers.IO) {
-                        publishDataPayload(locationData)
-                    }
+
                 } else if (error != null) {
                     _locationState.update { it.copy(error = error.message, gpsStrength = 0) }
                 }
+            }
+        }
+    }
+
+    fun startPublishing(intervalMs: Long) {
+        publishJob?.cancel()
+
+        publishJob = viewModelScope.launch {
+            while (true) {
+
+                lastLocation?.let { location ->
+                    withContext(Dispatchers.IO) {
+                        publishDataPayload(location)
+                    }
+                }
+
+                delay(intervalMs)
             }
         }
     }

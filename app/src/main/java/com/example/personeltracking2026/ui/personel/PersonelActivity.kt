@@ -20,6 +20,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.base.BaseActivity
 import com.example.personeltracking2026.core.map.MapTypeManager
+import com.example.personeltracking2026.core.mqtt.MqttConfigManager
 import com.example.personeltracking2026.core.mqtt.MqttReconnectManager
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.data.model.PersonelData
@@ -59,7 +60,6 @@ class PersonelActivity : BaseActivity() {
             SessionManager(this)
         )
     }
-
 
     private val zoneCenterLat    = -7.868729
     private val zoneCenterLon    = 105.643117
@@ -179,6 +179,7 @@ class PersonelActivity : BaseActivity() {
         super.onResume()
         binding.mapView.onResume()
         updateMqttUI()
+        startLocationUpdates()
         // FIX ANR: hapus viewModel.refreshBattery() — sudah dihandle receiver
     }
 
@@ -270,7 +271,7 @@ class PersonelActivity : BaseActivity() {
                         val diffSec = (System.currentTimeMillis() - lastSyncTime) / 1000
 
                         val (text, color) = when {
-                            diffSec < 10 -> "Just now" to "#69F0AE"
+                            diffSec < 2 -> "Just now" to "#69F0AE"
                             diffSec < 60 -> "${diffSec}s ago" to "#69F0AE"
                             diffSec < 300 -> "${diffSec / 60}m ago" to "#FFD740"
                             else -> "${diffSec / 60}m ago" to "#FF5252"
@@ -470,7 +471,8 @@ class PersonelActivity : BaseActivity() {
         val intervalMs = parseIntervalToMs(
             mqttPrefs.getString("interval", "5 seconds") ?: "5 seconds"
         )
-        viewModel.startLocationUpdates(intervalMs)
+        viewModel.startLocationUpdates(2000)
+        viewModel.startPublishing(intervalMs)
     }
 
     private fun parseIntervalToMs(interval: String): Long {
@@ -501,8 +503,10 @@ class PersonelActivity : BaseActivity() {
     // ─── UPDATE MQTT ────────────────────────────────────────────────────────────
 
     private fun updateMqttUI() {
-        pagerAdapter.mqttHost = mqttPrefs.getString("server", "-") ?: "-"
-        pagerAdapter.mqttPort = mqttPrefs.getString("port", "-") ?: "-"
+        val config = MqttConfigManager(this).load()
+
+        pagerAdapter.mqttHost = config.host ?: "-"
+        pagerAdapter.mqttPort = config.tcpPort.toString()
         pagerAdapter.interval = mqttPrefs.getString("interval", "5 seconds") ?: "5 seconds"
 
         pagerAdapter.notifyItemChanged(2)
