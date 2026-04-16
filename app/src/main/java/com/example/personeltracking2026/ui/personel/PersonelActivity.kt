@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -25,8 +26,9 @@ import com.example.personeltracking2026.data.model.PersonelData
 import com.example.personeltracking2026.data.repository.LocationRepository
 import com.example.personeltracking2026.data.repository.PersonelRepository
 import com.example.personeltracking2026.databinding.ActivityPersonelBinding
-import com.example.personeltracking2026.ui.settings.SettingsActivity
 import com.example.personeltracking2026.utils.drawableToBitmap
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.maplibre.android.MapLibre
@@ -99,8 +101,13 @@ class PersonelActivity : BaseActivity() {
 
         pagerAdapter = TopPagerAdapter()
         binding.viewPagerTop.adapter = pagerAdapter
+
         (binding.viewPagerTop.getChildAt(0) as RecyclerView)
             .itemAnimator = null
+
+        pagerAdapter.onFullDataClick = {
+            personelBottomSheet()
+        }
 
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayShowTitleEnabled(false)
@@ -247,8 +254,7 @@ class PersonelActivity : BaseActivity() {
                         if (text != lastText) {
                             pagerAdapter.lastSync = text
                             pagerAdapter.statusColor = color
-                            val currentpage = binding.viewPagerTop.currentItem
-                            pagerAdapter.notifyItemChanged(currentpage)
+                            pagerAdapter.notifyDataSetChanged()
 
                             lastText = text
                         }
@@ -285,6 +291,29 @@ class PersonelActivity : BaseActivity() {
     private fun updateBattery(percent: Int) {
         pagerAdapter.battery = percent
         pagerAdapter.notifyItemChanged(1)
+    }
+
+    private fun personelBottomSheet() {
+        val dialog = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.bottom_sheet_personel, null)
+
+        // ambil data dari ViewModel
+        val name = sessionManager.getName() ?: "-"
+        val nrp  = sessionManager.getUsername() ?: "-"
+        val personel = (viewModel.personelState.value as? PersonelState.Success)?.data
+        val location = viewModel.locationState.value.data
+
+        // SET DATA
+        view.findViewById<TextView>(R.id.tvName).text = name
+        view.findViewById<TextView>(R.id.tvNRP).text = nrp
+        view.findViewById<TextView>(R.id.tvRank).text = personel?.rank?.name ?: "-"
+        view.findViewById<TextView>(R.id.tvUnit).text = personel?.unit?.name ?: "-"
+        view.findViewById<TextView>(R.id.tvSquad).text = personel?.regu?.name ?: "-"
+        view.findViewById<TextView>(R.id.tvPersonelStatus).text = "Active"
+
+        dialog.setContentView(view)
+        dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        dialog.show()
     }
 
     // ─── MAP ─────────────────────────────────────────────────────────────────

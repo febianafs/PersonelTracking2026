@@ -31,6 +31,7 @@ class TopPagerAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     var mqttHost: String = "-"
     var mqttPort: String = "-"
     var interval: String = "-"
+    var onFullDataClick: (() -> Unit)? = null
 
     override fun getItemCount() = 3
 
@@ -58,7 +59,7 @@ class TopPagerAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (holder) {
-            is ProfileVH -> holder.bind(name, nrp, rank, latitude, longitude, battery, lastSync, statusColor)
+            is ProfileVH -> holder.bind(name, nrp, rank, latitude, longitude, battery, lastSync, statusColor, onFullDataClick)
             is VitalVH -> holder.bind(heartRate, lastSync, statusColor)
             is MqttVH -> holder.bind(mqttHost, mqttPort, interval, lastSync, statusColor)
         }
@@ -73,6 +74,7 @@ class TopPagerAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         private val tvBattery = itemView.findViewById<TextView?>(R.id.tvBattery)
         private val tvLastSync = itemView.findViewById<TextView?>(R.id.tvLastSync)
         private val dot = itemView.findViewById<View>(R.id.dotLastSync)
+        private val btnFullData = itemView.findViewById<TextView>(R.id.btnDataSelengkapnya)
 
         fun bind(
             name: String,
@@ -82,7 +84,8 @@ class TopPagerAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             longitude: Double,
             battery: Int,
             lastSync: String,
-            statusColor: String
+            statusColor: String,
+            onFullDataClick: (() -> Unit)? = null
         ) {
             tvName?.text = name
             tvNRP?.text = nrp
@@ -97,6 +100,10 @@ class TopPagerAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
             dot.backgroundTintList =
                 android.content.res.ColorStateList.valueOf(parsedColor)
+
+            btnFullData.setOnClickListener {
+                onFullDataClick?.invoke()
+            }
         }
     }
 
