@@ -1,8 +1,9 @@
 package com.example.personeltracking2026.core.mqtt.queue
 
+import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
-
+@Dao
 interface MqttDao {
 
     @Insert

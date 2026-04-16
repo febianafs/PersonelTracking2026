@@ -78,6 +78,9 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize|stateHidden"/>
         <activity
+            android:name=".ui.personel.FullscreenMapActivity"
+            android:exported="false"/>
+        <activity
             android:name=".ui.splash.SplashActivity"
             android:exported="true">
             <intent-filter>
