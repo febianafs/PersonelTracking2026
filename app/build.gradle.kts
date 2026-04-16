@@ -74,7 +74,8 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     // MAP
-    implementation("org.osmdroid:osmdroid-android:6.1.18")
+    //implementation("org.osmdroid:osmdroid-android:6.1.18")
+    implementation("org.maplibre.gl:android-sdk:13.0.2")
 
     // JWT
     implementation("com.auth0.android:jwtdecode:2.0.2")

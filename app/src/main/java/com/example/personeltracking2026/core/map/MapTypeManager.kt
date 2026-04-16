@@ -1,9 +1,5 @@
 package com.example.personeltracking2026.core.map
 
-import org.osmdroid.tileprovider.tilesource.ITileSource
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.tileprovider.tilesource.XYTileSource
-
 object MapTypeManager {
 
     enum class MapType(val label: String) {
@@ -13,33 +9,22 @@ object MapTypeManager {
         HYBRID("Hybrid")
     }
 
-    fun getTileSource(type: MapType): ITileSource {
+    // =========================
+    // Pakai MAPLIBRE
+    // =========================
+    fun getStyleUrl(type: MapType): String {
         return when (type) {
-            MapType.STANDARD -> TileSourceFactory.MAPNIK
+            MapType.STANDARD ->
+                "https://api.maptiler.com/maps/base-v4/style.json?key=LJfykuOhpb8qUA8Unzsr"
 
-            MapType.SATELLITE -> XYTileSource(
-                "EsriSatellite",
-                0, 20, 256, ".jpg",
-                arrayOf(
-                    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"
-                )
-            )
+            MapType.SATELLITE ->
+                "https://api.maptiler.com/maps/satellite-v4/style.json?key=LJfykuOhpb8qUA8Unzsr"
 
-            MapType.TERRAIN -> XYTileSource(
-                "OpenTopoMap",
-                0, 17, 256, "",
-                arrayOf(
-                    "https://tile.opentopomap.org/"
-                )
-            )
+            MapType.TERRAIN ->
+                "https://api.maptiler.com/maps/outdoor-v4/style.json?key=LJfykuOhpb8qUA8Unzsr"
 
-            MapType.HYBRID -> XYTileSource(
-                "EsriHybrid",
-                0, 20, 256, ".png",
-                arrayOf(
-                    "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Reference_Overlay/MapServer/tile/"
-                )
-            )
+            MapType.HYBRID ->
+                "https://api.maptiler.com/maps/hybrid-v4/style.json?key=LJfykuOhpb8qUA8Unzsr"
         }
     }
 }

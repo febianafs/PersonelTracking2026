@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -11,11 +12,11 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
-import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.RecyclerView
 import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.base.BaseActivity
 import com.example.personeltracking2026.core.map.MapTypeManager
@@ -25,17 +26,27 @@ import com.example.personeltracking2026.data.repository.LocationRepository
 import com.example.personeltracking2026.data.repository.PersonelRepository
 import com.example.personeltracking2026.databinding.ActivityPersonelBinding
 import com.example.personeltracking2026.ui.settings.SettingsActivity
+import com.example.personeltracking2026.utils.drawableToBitmap
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.osmdroid.config.Configuration
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polygon
+import org.maplibre.android.MapLibre
+import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
+import org.maplibre.android.style.layers.PropertyFactory.iconImage
+import org.maplibre.android.style.layers.SymbolLayer
+
 
 class PersonelActivity : BaseActivity() {
 
     private lateinit var binding: ActivityPersonelBinding
     private lateinit var mqttPrefs: SharedPreferences
     private lateinit var sessionManager: SessionManager
+    private lateinit var mapView: MapView
+    private lateinit var pagerAdapter: TopPagerAdapter
 
     private val viewModel: PersonelViewModel by viewModels {
         PersonelViewModel.Factory(
@@ -46,13 +57,16 @@ class PersonelActivity : BaseActivity() {
         )
     }
 
-    private val handler = Handler(Looper.getMainLooper())
-    private lateinit var syncRunnable: Runnable
+//    private val handler = Handler(Looper.getMainLooper())
+//    private lateinit var syncRunnable: Runnable
 
     private val zoneCenterLat    = -7.868729
     private val zoneCenterLon    = 105.643117
     private val zonaRadiusMeters = 500.0
     private var currentMapType   = MapTypeManager.MapType.STANDARD
+    private var currentLat = zoneCenterLat
+    private var currentLon = zoneCenterLon
+    private var mapLibreMap: org.maplibre.android.maps.MapLibreMap? = null
 
     // ─── PERMISSION ──────────────────────────────────────────────────────────
 
@@ -71,21 +85,45 @@ class PersonelActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
 
+        MapLibre.getInstance(
+            this,
+            null,
+            org.maplibre.android.WellKnownTileServer.MapLibre
+        )
+
         binding        = ActivityPersonelBinding.inflate(layoutInflater)
         sessionManager = SessionManager(this)
         mqttPrefs      = getSharedPreferences("mqtt_settings", MODE_PRIVATE)
 
         setContentView(binding.root)
+
+        pagerAdapter = TopPagerAdapter()
+        binding.viewPagerTop.adapter = pagerAdapter
+        (binding.viewPagerTop.getChildAt(0) as RecyclerView)
+            .itemAnimator = null
+
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayShowTitleEnabled(false)
 
         binding.btnOverflow.setOnClickListener { showOverflowMenu(it) }
 
         setupMap()
+
+        binding.btnZoomIn.setOnClickListener {
+            mapLibreMap?.animateCamera(
+                org.maplibre.android.camera.CameraUpdateFactory.zoomIn()
+            )
+        }
+
+        binding.btnZoomOut.setOnClickListener {
+            mapLibreMap?.animateCamera(
+                org.maplibre.android.camera.CameraUpdateFactory.zoomOut()
+            )
+        }
+
         setupVitalSignsInitial()
-        loadIntervalFromSettings()
+        updateMqttUI()
         setupClickListeners()
-        startSyncTimer()
         observeAllStates()
         loadPersonelData()
         requestLocationPermission()
@@ -95,30 +133,38 @@ class PersonelActivity : BaseActivity() {
     override fun onStart() {
         super.onStart()
         viewModel.registerBatteryReceiver(this)
+        binding.mapView.onStart()
     }
 
     // FIX ANR: unregister battery receiver di onStop
     override fun onStop() {
         super.onStop()
         viewModel.unregisterBatteryReceiver(this)
+        binding.mapView.onStop()
     }
 
     override fun onResume() {
         super.onResume()
         binding.mapView.onResume()
-        loadIntervalFromSettings()
+        updateMqttUI()
         // FIX ANR: hapus viewModel.refreshBattery() — sudah dihandle receiver
     }
 
     override fun onPause() {
         super.onPause()
         binding.mapView.onPause()
-        handler.removeCallbacks(syncRunnable)
+        //handler.removeCallbacks(syncRunnable)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        handler.removeCallbacks(syncRunnable)
+        //handler.removeCallbacks(syncRunnable)
+        binding.mapView.onDestroy()
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        binding.mapView.onLowMemory()
     }
 
     // ─── OBSERVERS ───────────────────────────────────────────────────────────
@@ -130,10 +176,29 @@ class PersonelActivity : BaseActivity() {
                 // Lokasi GPS
                 launch {
                     viewModel.locationState.collect { state ->
-                        state.data?.let { updateCoordinates(it.lat, it.lon); drawMapOverlays(it.lat, it.lon) }
-                        updateGpsSignal(state.gpsStrength)
-                        updateZoneStatus(state.isInZone)
-                        state.error?.let { Toast.makeText(this@PersonelActivity, it, Toast.LENGTH_SHORT).show() }
+
+                        val accuracy = state.data?.accuracy ?: Float.MAX_VALUE
+
+                        val (signalText) = when {
+                            accuracy <= 10 -> "Strong" to "#4FC3F7"
+                            accuracy <= 30 -> "Medium" to "#FFD740"
+                            accuracy <= 100 -> "Weak" to "#FF5252"
+                            else -> "No Signal" to "#FF5252"
+                        }
+
+                        if (pagerAdapter.gpsSignal != signalText) {
+                            pagerAdapter.gpsSignal = signalText
+                            pagerAdapter.notifyItemChanged(1, "GPS")
+                        }
+
+                        state.data?.let {
+                            updateCoordinates(it.lat, it.lon)
+                            updateMarker(it.lat, it.lon)
+
+                            pagerAdapter.latitude = it.lat
+                            pagerAdapter.longitude = it.lon
+                            pagerAdapter.notifyItemChanged(0)
+                        }
                     }
                 }
 
@@ -147,26 +212,49 @@ class PersonelActivity : BaseActivity() {
                     viewModel.personelState.collect { state ->
                         when (state) {
                             is PersonelState.Loading -> {
-                                binding.tvName.text = "Loading..."
-                                binding.tvNRP.text  = ""
+                                pagerAdapter.name = "Loading..."
+                                pagerAdapter.nrp = ""
+                                pagerAdapter.rank = ""
+                                pagerAdapter.notifyItemChanged(0)
                             }
                             is PersonelState.Success -> bindPersonelData(state.data)
-                            is PersonelState.Error   -> {
-                                binding.tvName.text = sessionManager.getName() ?: "-"
-                                binding.tvNRP.text  = sessionManager.getUsername() ?: "-"
+                            is PersonelState.Error -> {
+                                pagerAdapter.name = sessionManager.getName() ?: "-"
+                                pagerAdapter.nrp = sessionManager.getUsername() ?: "-"
+                                pagerAdapter.rank = sessionManager.getRank() ?: "-"
+                                pagerAdapter.notifyItemChanged(0)
                             }
                         }
                     }
                 }
 
-                // MQTT status
-                launch {
-                    viewModel.mqttConnected.collect { updateMqttStatus(it) }
-                }
-
                 // Last sync
                 launch {
-                    viewModel.lastSyncTime.collect { updateLastSyncUI(it) }
+                    var lastText = ""
+
+                    while (true) {
+                        val lastSyncTime = viewModel.lastSyncTime.value
+
+                        val diffSec = (System.currentTimeMillis() - lastSyncTime) / 1000
+
+                        val (text, color) = when {
+                            diffSec < 10 -> "Just now" to "#69F0AE"
+                            diffSec < 60 -> "${diffSec}s ago" to "#69F0AE"
+                            diffSec < 300 -> "${diffSec / 60}m ago" to "#FFD740"
+                            else -> "${diffSec / 60}m ago" to "#FF5252"
+                        }
+
+                        if (text != lastText) {
+                            pagerAdapter.lastSync = text
+                            pagerAdapter.statusColor = color
+                            val currentpage = binding.viewPagerTop.currentItem
+                            pagerAdapter.notifyItemChanged(currentpage)
+
+                            lastText = text
+                        }
+
+                        delay(1000)
+                    }
                 }
 
                 // Heart rate dari BLE
@@ -188,43 +276,84 @@ class PersonelActivity : BaseActivity() {
     }
 
     private fun bindPersonelData(data: PersonelData) {
-        binding.tvName.text = sessionManager.getName()     ?: "-"
-        binding.tvNRP.text  = sessionManager.getUsername() ?: "-"
+        pagerAdapter.name = sessionManager.getName() ?: "-"
+        pagerAdapter.nrp = sessionManager.getUsername() ?: "-"
+        pagerAdapter.rank = sessionManager.getRank() ?: "-"
+        pagerAdapter.notifyItemChanged(0)
+    }
+
+    private fun updateBattery(percent: Int) {
+        pagerAdapter.battery = percent
+        pagerAdapter.notifyItemChanged(1)
     }
 
     // ─── MAP ─────────────────────────────────────────────────────────────────
 
     private fun setupMap() {
-        Configuration.getInstance().userAgentValue = packageName
-        binding.mapView.apply {
-            setTileSource(MapTypeManager.getTileSource(currentMapType))
-            setMultiTouchControls(true)
-            controller.setZoom(15.0)
-            controller.setCenter(GeoPoint(zoneCenterLat, zoneCenterLon))
+        MapLibre.getInstance(this)
+
+        mapView = binding.mapView
+        mapView.onCreate(null)
+
+        mapView.getMapAsync { map ->
+            mapLibreMap = map
+
+            val styleUrl = MapTypeManager.getStyleUrl(currentMapType)
+            map.setStyle(
+                Style.Builder().fromUri(styleUrl)
+            ) {
+                val point = LatLng(currentLat, currentLon)
+
+                map.cameraPosition = CameraPosition.Builder()
+                    .target(point)
+                    .zoom(15.0)
+                    .build()
+
+                updateMarker(currentLat, currentLon)
+            }
         }
-        drawMapOverlays(zoneCenterLat, zoneCenterLon)
-        updateCoordinates(zoneCenterLat, zoneCenterLon)
-        updateZoneStatus(true)
     }
 
-    private fun drawMapOverlays(lat: Double, lon: Double) {
-        binding.mapView.overlays.clear()
-        val marker = Marker(binding.mapView).apply {
-            position = GeoPoint(lat, lon)
-            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-            title = "Personnel Position"
-            icon  = ResourcesCompat.getDrawable(resources, R.drawable.ic_location_pin, theme)
+    private fun updateMarker(lat: Double, lon: Double) {
+        val map = mapLibreMap ?: return
+        val point = org.maplibre.android.geometry.LatLng(lat, lon)
+        val geoJsonSource = org.maplibre.android.style.sources.GeoJsonSource(
+            "personel-source",
+            org.maplibre.geojson.Point.fromLngLat(lon, lat)
+        )
+
+        map.style?.apply {
+
+            getLayer("personel-layer")?.let { removeLayer(it) }
+            getSource("personel-source")?.let { removeSource(it) }
+
+            addSource(geoJsonSource)
+            // AMBIL drawable
+            val drawable = ContextCompat.getDrawable(this@PersonelActivity, R.drawable.ic_location_pin)
+                ?: return  // kalau null, stop biar gak crash
+
+            drawable.setTint(Color.rgb(255, 82, 82))
+
+            val bitmap = drawableToBitmap(drawable)
+
+            // addImage HARUS sebelum layer
+            addImage("marker-icon", bitmap)
+
+            val symbolLayer = SymbolLayer(
+                "personel-layer",
+                "personel-source"
+            ).withProperties(
+                iconImage("marker-icon"),
+                iconAllowOverlap(true),
+                iconIgnorePlacement(true)
+            )
+
+            addLayer(symbolLayer)
         }
-        val circle = Polygon(binding.mapView).apply {
-            points = Polygon.pointsAsCircle(GeoPoint(zoneCenterLat, zoneCenterLon), zonaRadiusMeters)
-            fillPaint.color    = android.graphics.Color.parseColor("#1A4FC3F7")
-            outlinePaint.color = android.graphics.Color.parseColor("#4FC3F7")
-            outlinePaint.strokeWidth = 2f
-        }
-        binding.mapView.overlays.add(circle)
-        binding.mapView.overlays.add(marker)
-        binding.mapView.controller.setCenter(GeoPoint(lat, lon))
-        binding.mapView.invalidate()
+
+        map.animateCamera(
+            org.maplibre.android.camera.CameraUpdateFactory.newLatLng(point)
+        )
     }
 
     private fun showMapTypeMenu() {
@@ -236,8 +365,7 @@ class PersonelActivity : BaseActivity() {
                 .firstOrNull { it.label == item.title.toString() }
                 ?.let {
                     currentMapType = it
-                    binding.mapView.setTileSource(MapTypeManager.getTileSource(it))
-                    binding.mapView.invalidate()
+                    applyMapType(it)
                 }
             true
         }
@@ -245,14 +373,30 @@ class PersonelActivity : BaseActivity() {
     }
 
     private fun updateCoordinates(lat: Double, lon: Double) {
+        currentLat = lat
+        currentLon = lon
+
         binding.tvCoordinates.text  = "$lat,"
         binding.tvCoordinates2.text = " $lon"
     }
 
-    private fun updateZoneStatus(inZone: Boolean) {
-        val color = if (inZone) "#69F0AE" else "#FF5252"
-        binding.tvZoneStatus.text = if (inZone) "In Zone ✓" else "Out of Zone ✗"
-        binding.tvZoneStatus.setTextColor(android.graphics.Color.parseColor(color))
+    private fun applyMapType(type: MapTypeManager.MapType) {
+        val map = mapLibreMap ?: return
+
+        // IMPAN posisi kamera sekarang
+        val currentCamera = map.cameraPosition
+
+        val styleUrl = MapTypeManager.getStyleUrl(type)
+
+        map.setStyle(
+            Style.Builder().fromUri(styleUrl)
+        ) {
+            // RESTORE kamera
+            map.cameraPosition = currentCamera
+
+            // Tambahin marker lagi
+            updateMarker(currentLat, currentLon)
+        }
     }
 
     // ─── LOCATION ────────────────────────────────────────────────────────────
@@ -289,139 +433,60 @@ class PersonelActivity : BaseActivity() {
         }
     }
 
+    private fun isInsideZone(
+        lat1: Double,
+        lon1: Double,
+        lat2: Double,
+        lon2: Double,
+        radius: Double
+    ): Boolean {
+        val results = FloatArray(1)
+        android.location.Location.distanceBetween(
+            lat1, lon1,
+            lat2, lon2,
+            results
+        )
+        return results[0] <= radius
+    }
+
     // ─── VITAL SIGNS UI ──────────────────────────────────────────────────────
 
     private fun setupVitalSignsInitial() {
         updateHeartRate(0)
-        updateGpsSignal(0)
-        updateMqttStatus(false)
     }
 
     private fun updateHeartRate(bpm: Int) {
-        if (bpm <= 0) {
-            binding.tvHeartRate.text = "-- BPM"
-            binding.progressHeartRate.progress = 0
-            return
-        }
-        binding.tvHeartRate.text = "$bpm BPM"
-        val progress = (bpm.coerceIn(40, 180) - 40) * 100 / 140
-        binding.progressHeartRate.progress = progress
+        pagerAdapter.heartRate = bpm
+        pagerAdapter.notifyItemChanged(1)
     }
 
-    private fun updateBattery(percent: Int) {
-        val color = when {
-            percent > 60      -> "#69F0AE"
-            percent in 30..60 -> "#FFD740"
-            percent in 10..29 -> "#FF6D00"
-            else              -> "#FF5252"
-        }
-        val icon = when {
-            percent > 60      -> R.drawable.ic_battery_full
-            percent in 30..60 -> R.drawable.ic_battery_half
-            percent in 10..29 -> R.drawable.ic_battery_low
-            else              -> R.drawable.ic_battery_empty
-        }
-        val parsedColor    = android.graphics.Color.parseColor(color)
-        val colorStateList = android.content.res.ColorStateList.valueOf(parsedColor)
+    // ─── UPDATE MQTT ────────────────────────────────────────────────────────────
 
-        binding.tvBattery.text                   = "$percent%"
-        binding.tvBattery.setTextColor(parsedColor)
-        binding.iconBattery.setImageResource(icon)
-        binding.iconBattery.imageTintList        = colorStateList
-        binding.progressBattery.progress         = percent
-        binding.progressBattery.progressTintList = colorStateList
+    private fun updateMqttUI() {
+        pagerAdapter.mqttHost = mqttPrefs.getString("server", "-") ?: "-"
+        pagerAdapter.mqttPort = mqttPrefs.getString("port", "-") ?: "-"
+        pagerAdapter.interval = mqttPrefs.getString("interval", "5 seconds") ?: "5 seconds"
 
-        if (percent < 10) {
-            val blink = android.view.animation.AlphaAnimation(1f, 0f).apply {
-                duration    = 500
-                repeatMode  = android.view.animation.Animation.REVERSE
-                repeatCount = android.view.animation.Animation.INFINITE
-            }
-            binding.iconBattery.startAnimation(blink)
-        } else {
-            binding.iconBattery.clearAnimation()
-        }
-    }
-
-    private fun updateGpsSignal(strength: Int) {
-        val (label, color) = when {
-            strength >= 80     -> Pair("Strong",    "#4FC3F7")
-            strength in 50..79 -> Pair("Medium",    "#FFD740")
-            strength > 0       -> Pair("Weak",      "#FF5252")
-            else               -> Pair("No Signal", "#FF5252")
-        }
-        val parsedColor = android.graphics.Color.parseColor(color)
-        binding.tvGpsSignal.text = label
-        binding.tvGpsSignal.setTextColor(parsedColor)
-        binding.progressGps.progress = strength
-        binding.progressGps.progressTintList =
-            android.content.res.ColorStateList.valueOf(parsedColor)
-    }
-
-    private fun updateMqttStatus(connected: Boolean) {
-        val color  = if (connected) "#69F0AE" else "#FF5252"
-        val label  = if (connected) "Connected" else "Disconnected"
-        val parsed = android.graphics.Color.parseColor(color)
-        binding.tvMqttStatus.text = label
-        binding.tvMqttStatus.setTextColor(parsed)
-        binding.dotMqtt.backgroundTintList =
-            android.content.res.ColorStateList.valueOf(parsed)
-    }
-
-    // ─── INTERVAL ────────────────────────────────────────────────────────────
-
-    private fun loadIntervalFromSettings() {
-        val interval = mqttPrefs.getString("interval", "5 seconds") ?: "5 seconds"
-        binding.tvInterval.text = interval
-            .replace(" seconds", "s").replace(" second", "s")
-            .replace(" minutes", "m").replace(" minute", "m")
-    }
-
-    // ─── LAST SYNC ───────────────────────────────────────────────────────────
-
-    private fun updateLastSyncUI(lastSyncTime: Long) {
-        val diffMs  = System.currentTimeMillis() - lastSyncTime
-        val diffSec = diffMs / 1000
-        val diffMin = diffSec / 60
-        val (text, color) = when {
-            diffSec < 10 -> Pair("Just now", "#69F0AE")
-            diffSec < 60 -> Pair("${diffSec}s ago", "#69F0AE")
-            diffMin < 5  -> Pair("${diffMin}m ago", "#FFD740")
-            else         -> Pair(
-                "Failed · ${
-                    java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-                        .format(java.util.Date(lastSyncTime))
-                }",
-                "#FF5252"
-            )
-        }
-        val parsed = android.graphics.Color.parseColor(color)
-        binding.tvLastSync.text = text
-        binding.tvLastSync.setTextColor(parsed)
-        binding.dotLastSync.backgroundTintList = android.content.res.ColorStateList.valueOf(parsed)
-        binding.iconSync.imageTintList         = android.content.res.ColorStateList.valueOf(parsed)
-    }
-
-    private fun startSyncTimer() {
-        syncRunnable = Runnable {
-            updateLastSyncUI(viewModel.lastSyncTime.value)
-            handler.postDelayed(syncRunnable, 1000)
-        }
-        handler.post(syncRunnable)
+        pagerAdapter.notifyItemChanged(2)
     }
 
     // ─── CLICK LISTENERS ─────────────────────────────────────────────────────
 
     private fun setupClickListeners() {
-        binding.btnDataSelengkapnya.setOnClickListener {
-            // TODO: buka bottom sheet data lengkap
-        }
+//        binding.btnDataSelengkapnya.setOnClickListener {
+//            // TODO: buka bottom sheet data lengkap
+//        }
         binding.btnFullMap.setOnClickListener {
-            binding.mapView.controller.setZoom(17.0)
+            val intent = Intent(this, FullscreenMapActivity::class.java)
+            intent.putExtra("lat", currentLat)
+            intent.putExtra("lon", currentLon)
+            intent.putExtra("mapType", currentMapType.name)
+
+            startActivity(intent)
         }
-        binding.btnUbahInterval.setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
-        }
+//        binding.btnUbahInterval.setOnClickListener {
+//            startActivity(Intent(this, SettingsActivity::class.java))
+//        }
         binding.btnMapType.setOnClickListener {
             showMapTypeMenu()
         }
