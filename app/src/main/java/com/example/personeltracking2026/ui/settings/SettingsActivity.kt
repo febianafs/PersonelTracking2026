@@ -70,6 +70,16 @@ class SettingsActivity : BaseActivity() {
             intervalOptions
         )
         binding.actInterval.setAdapter(adapter)
+
+        binding.actInterval.setOnItemClickListener { _, _, _, _ ->
+            val interval = binding.actInterval.text.toString()
+
+            getSharedPreferences("mqtt_settings", MODE_PRIVATE).edit {
+                putString("interval", interval)
+            }
+
+            showSavedIndicator()
+        }
     }
 
     // ─── LOAD CONFIG ─────────────────────────────────────────────────────────
@@ -97,13 +107,6 @@ class SettingsActivity : BaseActivity() {
         binding.btnSaveConnection!!.setOnClickListener {
             val config = buildConfigFromInput()
             MqttConfigManager(this).save(config)
-
-            val interval = binding.actInterval.text.toString()
-            if (interval.isNotEmpty()) {
-                getSharedPreferences("mqtt_settings", MODE_PRIVATE).edit {
-                    putString("interval", interval)
-                }
-            }
 
             showSavedIndicator()
         }
