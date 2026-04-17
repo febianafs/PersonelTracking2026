@@ -51,6 +51,8 @@ class MqttManager(private val context: Context) {
     private var retryCount                             = 0
     private var isIntentionallyStopped                 = false
 
+    private var reconnectAttempts = 0
+
     // ─── PUBLIC ──────────────────────────────────────────────────────────────
 
     fun connect() {
@@ -148,6 +150,8 @@ class MqttManager(private val context: Context) {
                 if (throwable != null) {
                     MqttLogger.error("Connect failed: ${throwable.message}")
                     onDisconnected?.invoke()
+
+                    //jika gagal, coba lagi setelah delay dengan exponential backoff
                     if (!isIntentionallyStopped) scheduleRetry()
                     return@whenComplete
                 }
@@ -157,12 +161,15 @@ class MqttManager(private val context: Context) {
                     retryCount = 0
                     onConnected?.invoke()
 
+                    //Flush queue setelah koneksi berhasil
                     scope.launch {
                         queueManager.flush(this@MqttManager)
                     }
                 } else {
                     MqttLogger.error("Connect rejected: ${connAck?.returnCode}")
                     onDisconnected?.invoke()
+
+                    //jika ditolak, coba lagi setelah delay dengan exponential backoff
                     if (!isIntentionallyStopped) scheduleRetry()
                 }
             }
