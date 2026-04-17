@@ -13,7 +13,7 @@ class MqttQueueManager(context: Context) {
 
         val currentSize = dao.count()
 
-        // 🔥 LIMIT QUEUE
+        // LIMIT QUEUE
         if (currentSize >= MAX_QUEUE_SIZE) {
             dao.deleteOldest()
         }
