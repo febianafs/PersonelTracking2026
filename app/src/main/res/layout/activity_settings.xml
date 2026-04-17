@@ -9,9 +9,6 @@
     android:background="@color/background2"
     tools:context=".ui.settings.SettingsActivity">
 
-    <!-- ═══════════════════════════════════════════════════════════
-         TOOLBAR
-    ════════════════════════════════════════════════════════════ -->
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="0dp"
@@ -58,9 +55,6 @@
         </LinearLayout>
     </com.google.android.material.appbar.MaterialToolbar>
 
-    <!-- ═══════════════════════════════════════════════════════════
-         SCROLL CONTENT
-    ════════════════════════════════════════════════════════════ -->
     <androidx.core.widget.NestedScrollView
         android:id="@+id/scrollView"
         android:layout_width="0dp"
@@ -80,9 +74,7 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <!-- ───────────────────────────────────────────────────
-                 CARD: MQTT CONNECTION
-            ──────────────────────────────────────────────────── -->
+            <!-- CARD: MQTT CONNECTION -->
             <androidx.cardview.widget.CardView
                 android:id="@+id/cardConnection"
                 android:layout_width="match_parent"
@@ -98,7 +90,7 @@
                     android:orientation="vertical"
                     android:padding="16dp">
 
-                    <!-- Section header -->
+                    <!-- Header -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -122,7 +114,6 @@
                             android:textSize="13sp"
                             android:textStyle="bold" />
 
-                        <!-- Connection status badge -->
                         <LinearLayout
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
@@ -148,6 +139,72 @@
                         </LinearLayout>
                     </LinearLayout>
 
+                    <!-- ─────────────────────────────────────────────
+                         [BARU] CONNECTION TYPE — RadioGroup
+                         Posisi: sebelum baris TCP + WebSocket port.
+                         Tujuan: user memilih apakah konek via TCP
+                         biasa (port 1883) atau WebSocket (ws://).
+                         State: disabled by default, enable setelah
+                         user tap tombol Save.
+                    ────────────────────────────────────────────── -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="6dp"
+                        android:text="Connection Type"
+                        android:textColor="@color/gray"
+                        android:textSize="12sp" />
+
+                    <RadioGroup
+                        android:id="@+id/radioGroupConnectionType"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        android:background="@color/background2"
+                        android:orientation="horizontal"
+                        android:padding="4dp">
+
+                        <!--
+                            TCP: konek langsung ke port 1883 (standar MQTT).
+                            Tidak pakai WebSocket handshake.
+                            enabled="false" → hanya bisa dipilih setelah Save.
+                        -->
+                        <RadioButton
+                            android:id="@+id/radioTcp"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:buttonTint="@color/primary"
+                            android:checked="false"
+                            android:enabled="false"
+                            android:paddingStart="8dp"
+                            android:text="TCP"
+                            android:textColor="@color/gray"
+                            android:textSize="13sp" />
+
+                        <!--
+                            WebSocket: konek ke port 9001 via ws://.
+                            Default aktif karena broker kita pakai WS.
+                            enabled="false" → hanya bisa dipilih setelah Save.
+                        -->
+                        <RadioButton
+                            android:id="@+id/radioWebSocket"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:buttonTint="@color/primary"
+                            android:checked="true"
+                            android:enabled="false"
+                            android:paddingStart="8dp"
+                            android:text="WebSocket"
+                            android:textColor="@color/white"
+                            android:textSize="13sp" />
+
+                    </RadioGroup>
+                    <!-- ─────────────────────────────────────────────
+                         [AKHIR TAMBAHAN RadioGroup]
+                    ────────────────────────────────────────────── -->
+
                     <!-- TCP + WebSocket port row -->
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -155,7 +212,6 @@
                         android:layout_marginBottom="12dp"
                         android:orientation="horizontal">
 
-                        <!-- TCP Port -->
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
@@ -193,7 +249,6 @@
                             </com.google.android.material.textfield.TextInputLayout>
                         </LinearLayout>
 
-                        <!-- WebSocket Port -->
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
@@ -361,9 +416,7 @@
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
-            <!-- ───────────────────────────────────────────────────
-                 CARD: DATA INTERVAL
-            ──────────────────────────────────────────────────── -->
+            <!-- CARD: DATA INTERVAL -->
             <androidx.cardview.widget.CardView
                 android:id="@+id/cardInterval"
                 android:layout_width="match_parent"
@@ -379,7 +432,6 @@
                     android:orientation="vertical"
                     android:padding="16dp">
 
-                    <!-- Section header -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -442,9 +494,6 @@
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
-    <!-- ═══════════════════════════════════════════════════════════
-         SAVED INDICATOR
-    ════════════════════════════════════════════════════════════ -->
     <TextView
         android:id="@+id/tvSaved"
         android:layout_width="wrap_content"
