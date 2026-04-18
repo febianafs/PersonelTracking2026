@@ -1,7 +1,7 @@
 package com.example.personeltracking2026.ui.personel
 
 import android.content.Intent
-import android.graphics.Color
+import android.content.res.Configuration
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -40,9 +40,14 @@ class TopPagerAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         val inflater = LayoutInflater.from(parent.context)
 
+        // Deteksi orientasi landscape
+        val isLandscape = parent.context.resources.configuration.orientation ==
+                Configuration.ORIENTATION_LANDSCAPE
+
         return when (viewType) {
             TYPE_PROFILE -> {
-                val view = inflater.inflate(R.layout.personel_items, parent, false)
+                val layoutRes = if (isLandscape) R.layout.personel_items_land else R.layout.personel_items
+                val view = inflater.inflate(layoutRes, parent, false)
                 ProfileVH(view)
             }
             TYPE_VITAL -> {
@@ -142,7 +147,6 @@ class TopPagerAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             interval: String,
             lastSync: String,
             statusColor: String
-
         ) {
             tvHostIp.text = "$hostIp"
             tvPort.text = "$port"
