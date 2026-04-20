@@ -74,15 +74,6 @@
                 android:letterSpacing="0.2"
                 android:layout_marginTop="12dp" />
 
-            <ImageView
-                android:id="@+id/imgChart"
-                android:layout_width="match_parent"
-                android:layout_height="60dp"
-                android:src="@drawable/img_chart"
-                android:scaleType="fitXY"
-                android:alpha="0.6"
-                android:layout_marginTop="16dp" />
-
         </LinearLayout>
 
         <!-- KANAN -->

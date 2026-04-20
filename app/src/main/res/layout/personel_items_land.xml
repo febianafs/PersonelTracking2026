@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- CARD PROFIL -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cardProfil"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="6dp"
+            app:cardBackgroundColor="@color/background"
+            tools:ignore="MissingConstraints">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <!-- AVATAR (atas, center) + BATTERY -->
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        android:id="@+id/imgAvatar"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:scaleType="centerCrop"
+                        android:src="@drawable/ic_launcher_background"
+                        android:background="#0D2138"
+                        android:layout_gravity="center_horizontal"/>
+
+                    <!-- BATTERY di pojok kanan atas -->
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_gravity="end|top">
+
+                        <TextView
+                            android:id="@+id/tvBattery"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="75"
+                            android:textColor="#69F0AE"
+                            android:textStyle="bold"
+                            android:textSize="11sp"/>
+
+                        <ImageView
+                            android:id="@+id/iconBattery"
+                            android:layout_width="12dp"
+                            android:layout_height="12dp"
+                            android:src="@drawable/ic_battery_full"
+                            android:layout_marginStart="2dp"
+                            app:tint="#69F0AE"/>
+
+                    </LinearLayout>
+
+                </FrameLayout>
+
+                <!-- NAME + NRP + RANK -->
+                <TextView
+                    android:id="@+id/tvName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Solah Vicenzio"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:gravity="center_horizontal"
+                    android:layout_marginTop="6dp"/>
+
+                <TextView
+                    android:id="@+id/tvNRP"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="NRP 123456789"
+                    android:textColor="#90CAF9"
+                    android:textSize="10sp"
+                    android:gravity="center_horizontal"/>
+
+                <TextView
+                    android:id="@+id/tvRank"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Pangkat"
+                    android:textColor="#FFFFFF"
+                    android:textSize="10sp"
+                    android:gravity="center_horizontal"
+                    android:layout_marginTop="1dp"/>
+
+                <!-- DIVIDER TIPIS -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#1A3A5C"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="6dp"/>
+
+                <!-- LAT + LON + BPM -->
+                <TextView
+                    android:id="@+id/tvLat"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Lat : -7.868729"
+                    android:textColor="#FFFFFF"
+                    android:textSize="10sp"/>
+
+                <TextView
+                    android:id="@+id/tvLon"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Long : 105.643117"
+                    android:textColor="#FFFFFF"
+                    android:textSize="10sp"
+                    android:layout_marginTop="1dp"/>
+
+                <TextView
+                    android:id="@+id/tvBpmCategory"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="HR : Normal"
+                    android:textColor="#69F0AE"
+                    android:textSize="10sp"
+                    android:layout_marginTop="1dp"/>
+
+                <!-- VIEW FULL DATA -->
+                <TextView
+                    android:id="@+id/btnDataSelengkapnya"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="View full data ›"
+                    android:textColor="@color/primary"
+                    android:textSize="10sp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?attr/selectableItemBackground"
+                    android:layout_gravity="end"
+                    android:layout_marginTop="4dp"/>
+
+                <!-- SPACER -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"/>
+
+                <!-- DIVIDER BAWAH -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#1A3A5C"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="6dp"/>
+
+                <!-- LAST SYNC ROW -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <ImageView
+                        android:id="@+id/iconSync"
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
+                        android:src="@drawable/ic_sync"
+                        app:tint="#90CAF9"
+                        android:layout_marginEnd="6dp"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Last sync"
+                        android:textColor="#90CAF9"
+                        android:textSize="11sp"/>
+
+                    <TextView
+                        android:id="@+id/tvLastSync"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="2 seconds ago"
+                        android:textColor="#69F0AE"
+                        android:textStyle="bold"
+                        android:textSize="11sp"
+                        android:layout_marginStart="6dp"/>
+
+                    <View
+                        android:layout_width="0dp"
+                        android:layout_height="1dp"
+                        android:layout_weight="1"/>
+
+                    <View
+                        android:id="@+id/dotLastSync"
+                        android:layout_width="8dp"
+                        android:layout_height="8dp"
+                        android:background="@drawable/bg_dot_connected"/>
+
+                </LinearLayout>
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+    </FrameLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

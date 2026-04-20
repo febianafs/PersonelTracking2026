@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,12 +18,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.RecyclerView
+import com.example.personeltracking2026.App
 import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.base.BaseActivity
 import com.example.personeltracking2026.core.map.MapTypeManager
 import com.example.personeltracking2026.core.mqtt.MqttConfigManager
+import com.example.personeltracking2026.core.mqtt.MqttPayloadBuilder
 import com.example.personeltracking2026.core.mqtt.MqttReconnectManager
 import com.example.personeltracking2026.core.session.SessionManager
+import com.example.personeltracking2026.core.sos.SosManager
 import com.example.personeltracking2026.data.model.PersonelData
 import com.example.personeltracking2026.data.repository.LocationRepository
 import com.example.personeltracking2026.data.repository.PersonelRepository
@@ -30,8 +34,10 @@ import com.example.personeltracking2026.databinding.ActivityPersonelBinding
 import com.example.personeltracking2026.utils.drawableToBitmap
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
@@ -68,6 +74,9 @@ class PersonelActivity : BaseActivity() {
     private var currentLat = zoneCenterLat
     private var currentLon = zoneCenterLon
     private var mapLibreMap: org.maplibre.android.maps.MapLibreMap? = null
+
+    // ─── SOS ─────────────────────────────────────────────────────────────────
+    private var markerBlinkJob: Job? = null
 
     // ─── PERMISSION ──────────────────────────────────────────────────────────
 
@@ -135,6 +144,17 @@ class PersonelActivity : BaseActivity() {
 
         setupMap()
 
+        val app = application as App
+        SosManager.init(
+            mqtt             = app.mqttManager,
+            session          = sessionManager,
+            serial           = android.provider.Settings.Secure.getString(
+                contentResolver,
+                android.provider.Settings.Secure.ANDROID_ID
+            ) ?: "unknown",
+            locationProvider = { Pair(currentLat, currentLon) }
+        )
+
         binding.btnZoomIn.setOnClickListener {
             mapLibreMap?.animateCamera(
                 org.maplibre.android.camera.CameraUpdateFactory.zoomIn()
@@ -191,6 +211,8 @@ class PersonelActivity : BaseActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Pastikan blink berhenti dan SOS di-reset saat Activity destroy
+        markerBlinkJob?.cancel()
         //handler.removeCallbacks(syncRunnable)
         binding.mapView.onDestroy()
     }
@@ -205,6 +227,18 @@ class PersonelActivity : BaseActivity() {
     private fun observeAllStates() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
+
+                // SOS — khusus marker blink + publish MQTT
+                // Toolbar blink sudah dihandle BaseActivity
+                launch {
+                    SosManager.isActive.collect { isActive ->
+                        if (isActive) {
+                            startMarkerBlink()
+                        } else {
+                            stopMarkerBlink()
+                        }
+                    }
+                }
 
                 // Lokasi GPS
                 launch {
@@ -226,8 +260,9 @@ class PersonelActivity : BaseActivity() {
 
                         state.data?.let {
                             updateCoordinates(it.lat, it.lon)
-                            updateMarker(it.lat, it.lon)
-
+                            if (!SosManager.isActive.value) {
+                                updateMarker(it.lat, it.lon)
+                            }
                             pagerAdapter.latitude = it.lat
                             pagerAdapter.longitude = it.lon
                             pagerAdapter.notifyItemChanged(0)
@@ -297,6 +332,28 @@ class PersonelActivity : BaseActivity() {
                 }
             }
         }
+    }
+
+    // ─── SOS (marker only — toolbar dihandle BaseActivity) ───────────────────
+
+    private fun startMarkerBlink() {
+        markerBlinkJob?.cancel()
+        markerBlinkJob = lifecycleScope.launch {
+            var toggle = false
+            while (SosManager.isActive.value) {
+                val color = if (toggle) Color.parseColor("#FF1744")
+                else Color.parseColor("#FF8A80")
+                updateMarkerWithColor(color)
+                toggle = !toggle
+                delay(500)
+            }
+        }
+    }
+
+    private fun stopMarkerBlink() {
+        markerBlinkJob?.cancel()
+        markerBlinkJob = null
+        updateMarkerWithColor(Color.rgb(255, 82, 82))
     }
 
     // ─── PERSONEL ────────────────────────────────────────────────────────────
@@ -409,6 +466,38 @@ class PersonelActivity : BaseActivity() {
         map.animateCamera(
             org.maplibre.android.camera.CameraUpdateFactory.newLatLng(point)
         )
+    }
+
+    private fun updateMarkerWithColor(tintColor: Int) {
+        val map = mapLibreMap ?: return
+
+        val geoJsonSource = org.maplibre.android.style.sources.GeoJsonSource(
+            "personel-source",
+            org.maplibre.geojson.Point.fromLngLat(currentLon, currentLat)
+        )
+
+        map.style?.apply {
+            getLayer("personel-layer")?.let { removeLayer(it) }
+            getSource("personel-source")?.let { removeSource(it) }
+
+            addSource(geoJsonSource)
+
+            val drawable = ContextCompat.getDrawable(
+                this@PersonelActivity, R.drawable.ic_location_pin
+            ) ?: return
+
+            drawable.setTint(tintColor)
+            addImage("marker-icon", drawableToBitmap(drawable))
+
+            addLayer(
+                SymbolLayer("personel-layer", "personel-source")
+                    .withProperties(
+                        iconImage("marker-icon"),
+                        iconAllowOverlap(true),
+                        iconIgnorePlacement(true)
+                    )
+            )
+        }
     }
 
     private fun showMapTypeMenu() {
