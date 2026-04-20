@@ -30,6 +30,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileWriter
 
 data class LocationState(
     val data       : LocationData? = null,
@@ -56,7 +58,36 @@ class PersonelViewModel(
     private val locationRepository: LocationRepository,
     private val sessionManager    : SessionManager
 ) : AndroidViewModel(application) {
+    private val fileName = "gps_log.csv"
 
+    private val file: File by lazy {
+        File(
+            getApplication<Application>().getExternalFilesDir(null),
+            fileName
+        ).apply {
+            if (!exists()) {
+                createNewFile()
+                writeText("timestamp,lat,lon,accuracy\n") // header
+            }
+        }
+    }
+
+    fun saveToCsv(
+        timestamp: Long,
+        lat: Double,
+        lon: Double,
+        accuracy: Float
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                FileWriter(file, true).use { writer ->
+                    writer.append("$timestamp,$lat,$lon,$accuracy\n")
+                }
+            } catch (e: Exception) {
+                Log.e("CSV_LOG", "Error writing CSV", e)
+            }
+        }
+    }
     companion object {
         private const val ZONE_CENTER_LAT    = -7.868729
         private const val ZONE_CENTER_LON    = 105.643117
@@ -188,6 +219,13 @@ class PersonelViewModel(
                         isInZone    = checkInZone(locationData.lat, locationData.lon)
                     )
 
+                    saveToCsv(
+                        locationData.timestamp,
+                        locationData.lat,
+                        locationData.lon,
+                        locationData.accuracy
+                    )
+
                 } else if (error != null) {
                     _locationState.update { it.copy(error = error.message, gpsStrength = 0) }
                 }
@@ -255,7 +293,8 @@ class PersonelViewModel(
             heartrateTs  = if (hr.timestamp > 0) hr.timestamp else System.currentTimeMillis(),
             batteryLevel = bat.percent
         )
-        Log.d("MQTT_TIMER", "SEND PAYLOAD = $payload")
+        //Log.d("MQTT_TIMER", "SEND PAYLOAD = $payload")
+        Log.d("GPS_TEST", "time=${location.timestamp}, lat=${location.lat}, lon=${location.lon}")
         mqttManager.publishData(payload)
     }
 
