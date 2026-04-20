@@ -26,9 +26,11 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.example.personeltracking2026.App
 import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.base.BaseActivity
 import com.example.personeltracking2026.core.session.SessionManager
+import com.example.personeltracking2026.core.sos.SosManager
 import com.example.personeltracking2026.data.repository.BodycamRepository
 import com.example.personeltracking2026.databinding.ActivityBodycamBinding
 import com.example.personeltracking2026.ui.login.LoginActivity
@@ -140,6 +142,14 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
         Log.d("DEVICE_ID", deviceId)
 
         sessionManager = SessionManager(this)
+
+        val app = application as App
+        SosManager.init(
+            mqtt             = app.mqttManager,
+            session          = sessionManager,
+            serial           = DeviceIdProvider.getDeviceId(this),
+            locationProvider = { Pair(0.0, 0.0) }
+        )
 
         WindowCompat.setDecorFitsSystemWindows(window, true)
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
