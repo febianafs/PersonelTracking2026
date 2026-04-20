@@ -10,6 +10,7 @@ import androidx.core.graphics.toColorInt
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.base.BaseActivity
 import com.example.personeltracking2026.core.mqtt.MqttConfig
 import com.example.personeltracking2026.core.mqtt.MqttConfigManager
@@ -38,6 +39,21 @@ class SettingsActivity : BaseActivity() {
         setupIntervalDropdown()
         loadSettings()
         setupButtons()
+
+        // Menambahkan listener untuk RadioGroup (TCP/WebSocket)
+        binding.radioGroupConnectionType?.setOnCheckedChangeListener { _, checkedId ->
+            when (checkedId) {
+                R.id.radioTcp -> {
+                    binding.etTcp?.isEnabled = true
+                    binding.etWs?.isEnabled = false
+                }
+
+                R.id.radioWebSocket -> {
+                    binding.etTcp?.isEnabled = false
+                    binding.etWs?.isEnabled = true
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -130,12 +146,12 @@ class SettingsActivity : BaseActivity() {
 
     private fun buildConfigFromInput(): MqttConfig {
         return MqttConfig(
-            host         = binding.etServer!!.text.toString().trim(),
-            tcpPort      = binding.etTcp!!.text.toString().toIntOrNull() ?: 1883,
-            wsPort       = binding.etWs!!.text.toString().toIntOrNull() ?: 9001,
-            username     = binding.etUsername!!.text.toString().trim(),
-            password     = binding.etPassword!!.text.toString(),
-            useWebSocket = true
+            host         = binding.etServer?.text.toString().trim(),
+            tcpPort      = binding.etTcp?.text.toString().toIntOrNull() ?: 1883,
+            wsPort       = binding.etWs?.text.toString().toIntOrNull() ?: 9001,
+            username     = binding.etUsername?.text.toString().trim(),
+            password     = binding.etPassword?.text.toString(),
+            useWebSocket = binding.radioWebSocket?.isChecked ?: false
         )
     }
 
@@ -149,20 +165,21 @@ class SettingsActivity : BaseActivity() {
     }
 
     private fun showSavedIndicator() {
-        binding.tvSaved!!.visibility = View.VISIBLE
-        binding.tvSaved!!.alpha = 0f
-        binding.tvSaved!!.animate()
-            .alpha(1f)
-            .setDuration(200)
-            .withEndAction {
-                binding.tvSaved!!.postDelayed({
-                    binding.tvSaved!!.animate()
-                        .alpha(0f)
-                        .setDuration(400)
-                        .withEndAction {
-                            binding.tvSaved!!.visibility = View.GONE
-                        }.start()
+        val tvSaved = binding.tvSaved
+        tvSaved?.visibility = View.VISIBLE
+        tvSaved?.alpha = 0f
+        tvSaved?.animate()
+            ?.alpha(1f)
+            ?.setDuration(200)
+            ?.withEndAction {
+                tvSaved?.postDelayed({
+                    tvSaved?.animate()
+                        ?.alpha(0f)
+                        ?.setDuration(400)
+                        ?.withEndAction {
+                            tvSaved?.visibility = View.GONE
+                        }?.start()
                 }, 1500)
-            }.start()
+            }?.start()
     }
 }
