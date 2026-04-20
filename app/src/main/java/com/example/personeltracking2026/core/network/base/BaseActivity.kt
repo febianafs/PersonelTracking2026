@@ -2,6 +2,7 @@ package com.example.personeltracking2026.core.base
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -11,24 +12,50 @@ import android.text.Spannable
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
 import android.view.ContextThemeWrapper
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.PopupMenu
+import android.widget.Toast
+import androidx.appcompat.widget.Toolbar
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.session.SessionManager
+import com.example.personeltracking2026.core.sos.SosManager
 import com.example.personeltracking2026.ui.about.AboutActivity
 import com.example.personeltracking2026.ui.login.LoginActivity
 import com.example.personeltracking2026.ui.settings.SettingsActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 abstract class BaseActivity : AppCompatActivity() {
 
     private lateinit var sessionManager: SessionManager
     private lateinit var connectivityManager: ConnectivityManager
     private var noInternetSnackbar: Snackbar? = null
+
+    // ─── SOS ─────────────────────────────────────────────────────────────────
+    private var sosBlinkJob: Job? = null
+
+    /**
+     * Override di Activity yang punya toolbar dengan ID berbeda,
+     * atau biarkan null kalau Activity tidak punya toolbar (Login, Main).
+     * Default: cari toolbar dengan ID R.id.toolbar.
+     */
+    open fun getSosToolbar(): androidx.appcompat.widget.Toolbar? =
+        findViewById(R.id.toolbar)
+
+    /**
+     * Set true di LoginActivity dan MainActivity agar SOS tidak aktif di sana.
+     */
+    open val isSosEnabled: Boolean get() = true
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -45,20 +72,20 @@ abstract class BaseActivity : AppCompatActivity() {
         sessionManager = SessionManager(this)
         connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
-        // Keep screen on
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        if (isSosEnabled) {
+            observeSosState()
+        }
     }
 
     override fun onResume() {
         super.onResume()
-
-        // Register network callback
         val request = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .build()
         connectivityManager.registerNetworkCallback(request, networkCallback)
 
-        // Cek kondisi internet saat ini
         if (!isInternetAvailable()) {
             showNoInternetBanner()
         }
@@ -68,10 +95,67 @@ abstract class BaseActivity : AppCompatActivity() {
         super.onPause()
         try {
             connectivityManager.unregisterNetworkCallback(networkCallback)
-        } catch (e: Exception) {
-            // Ignore kalau belum terdaftar
+        } catch (e: Exception) { /* Ignore */ }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        sosBlinkJob?.cancel()
+    }
+
+    // ─── HARDWARE BUTTON ─────────────────────────────────────────────────────
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (isSosEnabled && keyCode == KeyEvent.KEYCODE_F3) {
+            SosManager.toggle()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    // ─── SOS OBSERVER ────────────────────────────────────────────────────────
+
+    private fun observeSosState() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                SosManager.isActive.collect { isActive ->
+                    if (isActive) {
+                        startToolbarBlink()
+                        Toast.makeText(
+                            this@BaseActivity,
+                            "⚠ SOS AKTIF — tekan F3 lagi untuk batalkan",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } else {
+                        stopToolbarBlink()
+                    }
+                }
+            }
         }
     }
+
+    private fun startToolbarBlink() {
+        sosBlinkJob?.cancel()
+        sosBlinkJob = lifecycleScope.launch {
+            var toggle = false
+            while (SosManager.isActive.value) {
+                getSosToolbar()?.setBackgroundColor(
+                    if (toggle) Color.parseColor("#FF1744")
+                    else Color.parseColor("#0D2138")
+                )
+                toggle = !toggle
+                delay(500)
+            }
+        }
+    }
+
+    private fun stopToolbarBlink() {
+        sosBlinkJob?.cancel()
+        sosBlinkJob = null
+        getSosToolbar()?.setBackgroundResource(R.color.secondary)
+    }
+
+    // ─── NETWORK ─────────────────────────────────────────────────────────────
 
     private fun isInternetAvailable(): Boolean {
         val network = connectivityManager.activeNetwork ?: return false
@@ -92,6 +176,8 @@ abstract class BaseActivity : AppCompatActivity() {
         noInternetSnackbar?.dismiss()
         noInternetSnackbar = null
     }
+
+    // ─── OVERFLOW MENU ───────────────────────────────────────────────────────
 
     fun showOverflowMenu(anchor: View) {
         val wrapper = ContextThemeWrapper(this, R.style.DarkPopupMenu)
@@ -142,6 +228,7 @@ abstract class BaseActivity : AppCompatActivity() {
 
     private fun logout() {
         sessionManager.clearSession()
+        SosManager.deactivate() // Matikan SOS saat logout
         val intent = Intent(this, LoginActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)
