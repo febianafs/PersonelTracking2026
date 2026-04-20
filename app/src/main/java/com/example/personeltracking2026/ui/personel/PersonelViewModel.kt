@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.provider.Settings
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -26,9 +27,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileWriter
 
 data class LocationState(
     val data       : LocationData? = null,
@@ -55,7 +59,36 @@ class PersonelViewModel(
     private val locationRepository: LocationRepository,
     private val sessionManager    : SessionManager
 ) : AndroidViewModel(application) {
+    private val fileName = "gps_log.csv"
 
+    private val file: File by lazy {
+        File(
+            getApplication<Application>().getExternalFilesDir(null),
+            fileName
+        ).apply {
+            if (!exists()) {
+                createNewFile()
+                writeText("timestamp,lat,lon,accuracy\n") // header
+            }
+        }
+    }
+
+    fun saveToCsv(
+        timestamp: Long,
+        lat: Double,
+        lon: Double,
+        accuracy: Float
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                FileWriter(file, true).use { writer ->
+                    writer.append("$timestamp,$lat,$lon,$accuracy\n")
+                }
+            } catch (e: Exception) {
+                Log.e("CSV_LOG", "Error writing CSV", e)
+            }
+        }
+    }
     companion object {
         private const val ZONE_CENTER_LAT    = -7.868729
         private const val ZONE_CENTER_LON    = 105.643117
@@ -65,6 +98,7 @@ class PersonelViewModel(
     private var locationJob: Job? = null
     private var lastLocation: LocationData? = null
     private var publishJob: Job? = null
+    private val intervalFlow = MutableStateFlow(5000L)
 
     // ─── STATE FLOWS ─────────────────────────────────────────────────────────
 
@@ -91,7 +125,10 @@ class PersonelViewModel(
     val mqttManager = (application as App).mqttManager.apply {
         onConnected      = { _mqttConnected.value = true }
         onDisconnected   = { _mqttConnected.value = false }
-        onPublishSuccess = { _ -> _lastSyncTime.value = System.currentTimeMillis() }
+        onPublishSuccess = {
+            val now = System.currentTimeMillis()
+            Log.d("MQTT_TIMER", "SUCCESS publish at $now")
+        }
     }
 
     // ─── BATTERY RECEIVER ────────────────────────────────────────────────────
@@ -180,6 +217,13 @@ class PersonelViewModel(
                         isInZone    = checkInZone(locationData.lat, locationData.lon)
                     )
 
+                    saveToCsv(
+                        locationData.timestamp,
+                        locationData.lat,
+                        locationData.lon,
+                        locationData.accuracy
+                    )
+
                 } else if (error != null) {
                     _locationState.update { it.copy(error = error.message, gpsStrength = 0) }
                 }
@@ -187,26 +231,48 @@ class PersonelViewModel(
         }
     }
 
-    fun startPublishing(intervalMs: Long) {
+    fun startPublishing() {
         publishJob?.cancel()
 
         publishJob = viewModelScope.launch {
-            while (true) {
+            intervalFlow.collectLatest { interval ->
 
-                lastLocation?.let { location ->
-                    withContext(Dispatchers.IO) {
-                        publishDataPayload(location)
+                Log.d("MQTT_TIMER", "NEW INTERVAL = $interval ms")
+
+                while (true) {
+                    val now = System.currentTimeMillis()
+
+                    lastLocation?.let { location ->
+                        val now = System.currentTimeMillis()
+
+                        if (mqttManager.isConnected()) {
+                            Log.d("MQTT_TIMER", "PUBLISH at $now")
+
+                            _lastSyncTime.value = now
+
+                            withContext(Dispatchers.IO) {
+                                publishDataPayload(location)
+                            }
+                        } else {
+                            Log.d("MQTT_TIMER", "MQTT NOT CONNECTED → SKIP")
+                        }
                     }
-                }
 
-                delay(intervalMs)
+                    delay(interval)
+                }
             }
         }
     }
 
-    private fun publishDataPayload(location: LocationData) {
-        if (!mqttManager.isConnected()) return
+    fun updateInterval(intervalMs: Long) {
+        intervalFlow.value = intervalMs
+    }
 
+    private fun publishDataPayload(location: LocationData) {
+        if (!mqttManager.isConnected()) {
+            Log.d("MQTT_TIMER", "MQTT NOT CONNECTED → SKIP")
+            return
+        }
         val serialNumber = Settings.Secure.getString(
             getApplication<Application>().contentResolver,
             Settings.Secure.ANDROID_ID
@@ -225,6 +291,8 @@ class PersonelViewModel(
             heartrateTs  = if (hr.timestamp > 0) hr.timestamp else System.currentTimeMillis(),
             batteryLevel = bat.percent
         )
+        //Log.d("MQTT_TIMER", "SEND PAYLOAD = $payload")
+        Log.d("GPS_TEST", "time=${location.timestamp}, lat=${location.lat}, lon=${location.lon}")
         mqttManager.publishData(payload)
     }
 

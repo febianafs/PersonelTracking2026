@@ -4,6 +4,7 @@ import android.graphics.Color
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.map.MapTypeManager
 import com.example.personeltracking2026.databinding.ActivityFullscreenMapBinding
@@ -69,14 +70,10 @@ class FullscreenMapActivity : AppCompatActivity() {
         currentLat = intent.getDoubleExtra("lat", 0.0)
         currentLon = intent.getDoubleExtra("lon", 0.0)
 
-        currentMapType = try {
-            MapTypeManager.MapType.valueOf(
-                intent.getStringExtra("mapType")
-                    ?: MapTypeManager.MapType.STANDARD.name
-            )
-        } catch (e: Exception) {
-            MapTypeManager.MapType.STANDARD
-        }
+        val savedType = getSharedPreferences("map_settings", MODE_PRIVATE)
+            .getString("map_type", MapTypeManager.MapType.STANDARD.name)
+
+        currentMapType = MapTypeManager.MapType.valueOf(savedType!!)
 
         val styleUrl = MapTypeManager.getStyleUrl(currentMapType)
 
@@ -163,6 +160,10 @@ class FullscreenMapActivity : AppCompatActivity() {
                 ?.let {
                     currentMapType = it
                     applyMapType(it)
+
+                    getSharedPreferences("map_settings", MODE_PRIVATE).edit {
+                        putString("map_type", it.name)
+                    }
                 }
             true
         }
@@ -191,7 +192,20 @@ class FullscreenMapActivity : AppCompatActivity() {
 
     // Lifecycle
     override fun onStart() { super.onStart(); mapView.onStart() }
-    override fun onResume() { super.onResume(); mapView.onResume() }
+    override fun onResume() {
+        super.onResume()
+        mapView.onResume()
+
+        val savedType = getSharedPreferences("map_settings", MODE_PRIVATE)
+            .getString("map_type", MapTypeManager.MapType.STANDARD.name)
+
+        val newType = MapTypeManager.MapType.valueOf(savedType!!)
+
+        if (newType != currentMapType) {
+            currentMapType = newType
+            applyMapType(newType)
+        }
+    }
     override fun onPause() { super.onPause(); mapView.onPause() }
     override fun onStop() { super.onStop(); mapView.onStop() }
     override fun onDestroy() { super.onDestroy(); mapView.onDestroy() }
