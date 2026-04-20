@@ -97,10 +97,10 @@
                             android:id="@+id/tvNRP"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
                             android:text="NRP 123456789"
                             android:textColor="#90CAF9"
                             android:textSize="11sp"
+                            android:layout_marginTop="5dp"
 
                             app:layout_constraintEnd_toStartOf="@+id/guidelineMid"
                             app:layout_constraintStart_toStartOf="parent"
@@ -114,6 +114,7 @@
                             android:text="Pangkat"
                             android:textColor="#FFFFFF"
                             android:textSize="11sp"
+                            android:layout_marginTop="5dp"
 
                             app:layout_constraintEnd_toStartOf="@+id/guidelineMid"
                             app:layout_constraintStart_toStartOf="parent"
@@ -139,6 +140,7 @@
                             android:text="Long : 105.643117"
                             android:textColor="#FFFFFF"
                             android:textSize="11sp"
+                            android:layout_marginTop="5dp"
 
                             app:layout_constraintStart_toStartOf="@id/guidelineMid"
                             app:layout_constraintEnd_toEndOf="parent"
@@ -151,6 +153,7 @@
                             android:text="HR : Normal"
                             android:textColor="#69F0AE"
                             android:textSize="11sp"
+                            android:layout_marginTop="5dp"
 
                             app:layout_constraintStart_toStartOf="@id/guidelineMid"
                             app:layout_constraintEnd_toEndOf="parent"

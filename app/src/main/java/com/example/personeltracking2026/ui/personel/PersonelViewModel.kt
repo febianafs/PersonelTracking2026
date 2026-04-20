@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.provider.Settings
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -25,6 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -64,6 +66,7 @@ class PersonelViewModel(
     private var locationJob: Job? = null
     private var lastLocation: LocationData? = null
     private var publishJob: Job? = null
+    private val intervalFlow = MutableStateFlow(5000L)
 
     // ─── STATE FLOWS ─────────────────────────────────────────────────────────
 
@@ -91,7 +94,10 @@ class PersonelViewModel(
     val mqttManager = MqttManager(application).apply {
         onConnected      = { _mqttConnected.value = true }
         onDisconnected   = { _mqttConnected.value = false }
-        onPublishSuccess = { _ -> _lastSyncTime.value = System.currentTimeMillis() }
+        onPublishSuccess = {
+            val now = System.currentTimeMillis()
+            Log.d("MQTT_TIMER", "SUCCESS publish at $now")
+        }
     }
 
     // ─── BATTERY RECEIVER ────────────────────────────────────────────────────
@@ -189,26 +195,48 @@ class PersonelViewModel(
         }
     }
 
-    fun startPublishing(intervalMs: Long) {
+    fun startPublishing() {
         publishJob?.cancel()
 
         publishJob = viewModelScope.launch {
-            while (true) {
+            intervalFlow.collectLatest { interval ->
 
-                lastLocation?.let { location ->
-                    withContext(Dispatchers.IO) {
-                        publishDataPayload(location)
+                Log.d("MQTT_TIMER", "NEW INTERVAL = $interval ms")
+
+                while (true) {
+                    val now = System.currentTimeMillis()
+
+                    lastLocation?.let { location ->
+                        val now = System.currentTimeMillis()
+
+                        if (mqttManager.isConnected()) {
+                            Log.d("MQTT_TIMER", "PUBLISH at $now")
+
+                            _lastSyncTime.value = now
+
+                            withContext(Dispatchers.IO) {
+                                publishDataPayload(location)
+                            }
+                        } else {
+                            Log.d("MQTT_TIMER", "MQTT NOT CONNECTED → SKIP")
+                        }
                     }
-                }
 
-                delay(intervalMs)
+                    delay(interval)
+                }
             }
         }
     }
 
-    private fun publishDataPayload(location: LocationData) {
-        if (!mqttManager.isConnected()) return
+    fun updateInterval(intervalMs: Long) {
+        intervalFlow.value = intervalMs
+    }
 
+    private fun publishDataPayload(location: LocationData) {
+        if (!mqttManager.isConnected()) {
+            Log.d("MQTT_TIMER", "MQTT NOT CONNECTED → SKIP")
+            return
+        }
         val serialNumber = Settings.Secure.getString(
             getApplication<Application>().contentResolver,
             Settings.Secure.ANDROID_ID
@@ -227,6 +255,7 @@ class PersonelViewModel(
             heartrateTs  = if (hr.timestamp > 0) hr.timestamp else System.currentTimeMillis(),
             batteryLevel = bat.percent
         )
+        Log.d("MQTT_TIMER", "SEND PAYLOAD = $payload")
         mqttManager.publishData(payload)
     }
 

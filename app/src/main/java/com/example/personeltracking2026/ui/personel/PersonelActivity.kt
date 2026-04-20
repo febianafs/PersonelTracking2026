@@ -12,6 +12,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -77,7 +78,6 @@ class PersonelActivity : BaseActivity() {
         val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (granted) {
-            startLocationUpdates()
             requestBackgroundLocation()
         }
         else Toast.makeText(this, "Location permission required", Toast.LENGTH_LONG).show()
@@ -133,6 +133,11 @@ class PersonelActivity : BaseActivity() {
 
         reconnectManager = MqttReconnectManager(this, viewModel.mqttManager)
 
+        val savedType = getSharedPreferences("map_settings", MODE_PRIVATE)
+            .getString("map_type", MapTypeManager.MapType.STANDARD.name)
+
+        currentMapType = MapTypeManager.MapType.valueOf(savedType!!)
+
         setupMap()
 
         binding.btnZoomIn.setOnClickListener {
@@ -163,6 +168,8 @@ class PersonelActivity : BaseActivity() {
 
         viewModel.registerBatteryReceiver(this)
         binding.mapView.onStart()
+        updateMqttUI()
+        startLocationUpdates()
     }
 
     // FIX ANR: unregister battery receiver di onStop
@@ -178,8 +185,21 @@ class PersonelActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
         binding.mapView.onResume()
-        updateMqttUI()
-        startLocationUpdates()
+        val savedType = getSharedPreferences("map_settings", MODE_PRIVATE)
+            .getString("map_type", MapTypeManager.MapType.STANDARD.name)
+
+        val newType = MapTypeManager.MapType.valueOf(savedType!!)
+
+        if (newType != currentMapType) {
+            currentMapType = newType
+            applyMapType(newType)
+        }
+
+        val interval = parseIntervalToMs(
+            mqttPrefs.getString("interval", "5 seconds") ?: "5 seconds"
+        )
+
+        viewModel.updateInterval(interval)
         // FIX ANR: hapus viewModel.refreshBattery() — sudah dihandle receiver
     }
 
@@ -263,11 +283,17 @@ class PersonelActivity : BaseActivity() {
 
                 // Last sync
                 launch {
-                    var lastText = ""
+                    var lastSyncTime = 0L
 
+                    // ambil update dari MQTT
+                    launch {
+                        viewModel.lastSyncTime.collect {
+                            lastSyncTime = it
+                        }
+                    }
+
+                    // timer UI tiap detik
                     while (true) {
-                        val lastSyncTime = viewModel.lastSyncTime.value
-
                         val diffSec = (System.currentTimeMillis() - lastSyncTime) / 1000
 
                         val (text, color) = when {
@@ -277,14 +303,9 @@ class PersonelActivity : BaseActivity() {
                             else -> "${diffSec / 60}m ago" to "#FF5252"
                         }
 
-                        if (text != lastText) {
-                            pagerAdapter.lastSync = text
-                            pagerAdapter.statusColor = color
-                            pagerAdapter.notifyDataSetChanged()
-
-                            lastText = text
-                        }
-
+                        pagerAdapter.lastSync = text
+                        pagerAdapter.statusColor = color
+                        pagerAdapter.notifyDataSetChanged()
                         delay(1000)
                     }
                 }
@@ -421,6 +442,10 @@ class PersonelActivity : BaseActivity() {
                 ?.let {
                     currentMapType = it
                     applyMapType(it)
+
+                    getSharedPreferences("map_settings", MODE_PRIVATE).edit {
+                        putString("map_type", it.name)
+                    }
                 }
             true
         }
@@ -461,18 +486,16 @@ class PersonelActivity : BaseActivity() {
             this, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
-        if (granted) startLocationUpdates()
+        if (granted)
+            //startLocationUpdates()
         else locationPermissionRequest.launch(
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         )
     }
 
     private fun startLocationUpdates() {
-        val intervalMs = parseIntervalToMs(
-            mqttPrefs.getString("interval", "5 seconds") ?: "5 seconds"
-        )
         viewModel.startLocationUpdates(2000)
-        viewModel.startPublishing(intervalMs)
+        viewModel.startPublishing()
     }
 
     private fun parseIntervalToMs(interval: String): Long {
