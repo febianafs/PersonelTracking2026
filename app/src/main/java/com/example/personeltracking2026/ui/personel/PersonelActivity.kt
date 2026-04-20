@@ -18,6 +18,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.RecyclerView
+import com.example.personeltracking2026.App
 import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.base.BaseActivity
 import com.example.personeltracking2026.core.map.MapTypeManager
@@ -143,10 +144,11 @@ class PersonelActivity : BaseActivity() {
 
         setupMap()
 
+        val app = application as App
         SosManager.init(
-            mqtt     = viewModel.mqttManager,
-            session  = sessionManager,
-            serial   = android.provider.Settings.Secure.getString(
+            mqtt             = app.mqttManager,
+            session          = sessionManager,
+            serial           = android.provider.Settings.Secure.getString(
                 contentResolver,
                 android.provider.Settings.Secure.ANDROID_ID
             ) ?: "unknown",

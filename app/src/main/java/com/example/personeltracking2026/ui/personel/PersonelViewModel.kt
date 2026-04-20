@@ -11,6 +11,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.personeltracking2026.App
 import com.example.personeltracking2026.core.mqtt.MqttManager
 import com.example.personeltracking2026.core.mqtt.MqttPayloadBuilder
 import com.example.personeltracking2026.core.session.SessionManager
@@ -87,8 +88,7 @@ class PersonelViewModel(
 
     // ─── MQTT ────────────────────────────────────────────────────────────────
 
-    // FIX: MqttManager butuh context — pakai application context
-    val mqttManager = MqttManager(application).apply {
+    val mqttManager = (application as App).mqttManager.apply {
         onConnected      = { _mqttConnected.value = true }
         onDisconnected   = { _mqttConnected.value = false }
         onPublishSuccess = { _ -> _lastSyncTime.value = System.currentTimeMillis() }
@@ -103,13 +103,11 @@ class PersonelViewModel(
     }
 
     init {
-        mqttManager.connect()
         viewModelScope.launch(Dispatchers.IO) { refreshBattery() }
     }
 
     override fun onCleared() {
         super.onCleared()
-        mqttManager.disconnect()
     }
 
     // ─── BATTERY RECEIVER LIFECYCLE ──────────────────────────────────────────
