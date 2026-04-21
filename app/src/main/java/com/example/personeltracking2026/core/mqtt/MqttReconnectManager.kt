@@ -14,7 +14,7 @@ class MqttReconnectManager(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private var reconnectJob: Job? = null
+    private var watchdogJob: Job? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var isReconnecting = false
 
@@ -30,15 +30,15 @@ class MqttReconnectManager(
     // STOP SYSTEM
     // ─────────────────────────────
     fun stop() {
-        reconnectJob?.cancel()
+        watchdogJob?.cancel()
         unregisterNetwork()
     }
 
     // ─────────────────────────────
-    // NETWORK MONITOR (WiFi ON/OFF)
+    // NETWORK MONITOR
+    // Hanya reconnect kalau MQTT benar-benar putus
     // ─────────────────────────────
     private fun startNetworkMonitor() {
-
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
         val request = NetworkRequest.Builder()
@@ -48,18 +48,24 @@ class MqttReconnectManager(
         networkCallback = object : ConnectivityManager.NetworkCallback() {
 
             override fun onAvailable(network: Network) {
+                val caps = (context.getSystemService(Context.CONNECTIVITY_SERVICE)
+                        as ConnectivityManager).getNetworkCapabilities(network)
 
-                val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-                val caps = cm.getNetworkCapabilities(network)
+                val isValidated = caps?.hasCapability(
+                    NetworkCapabilities.NET_CAPABILITY_VALIDATED
+                ) == true
 
-                val isReady = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+                if (!isValidated) {
+                    Log.d(TAG, "Network not validated → skip")
+                    return
+                }
 
-                if (isReady) {
-                    Log.d(TAG, "Network validated → reconnect MQTT")
-
+                // Hanya reconnect kalau memang putus
+                if (!mqttManager.isConnected()) {
+                    Log.d(TAG, "Network available + MQTT disconnected → reconnect")
                     reconnectNow()
                 } else {
-                    Log.d(TAG, "Network not ready → skip")
+                    Log.d(TAG, "Network available + MQTT already connected → skip")
                 }
             }
 
@@ -79,47 +85,45 @@ class MqttReconnectManager(
     }
 
     // ─────────────────────────────
-    // WATCHDOG (CHECK TIAP 5 DETIK)
+    // WATCHDOG — cek tiap 30 detik
+    // Hanya connect kalau putus, JANGAN disconnect dulu
     // ─────────────────────────────
     private fun startWatchdog() {
-
-        reconnectJob = scope.launch {
-
+        watchdogJob = scope.launch {
             while (isActive) {
+                delay(30_000) // cek tiap 30 detik, bukan 5 detik
 
                 if (!mqttManager.isConnected()) {
-                    Log.d(TAG, "MQTT not connected → reconnect")
+                    Log.d(TAG, "Watchdog: MQTT not connected → reconnect")
                     reconnectNow()
                 }
-
-                delay(5000)
+                // kalau sudah connected, tidak lakukan apa-apa
             }
         }
     }
 
     // ─────────────────────────────
     // RECONNECT
+    // TIDAK disconnect dulu — langsung connect
+    // MqttManager akan handle kalau client sudah ada
     // ─────────────────────────────
     private fun reconnectNow() {
-
         if (isReconnecting) return
         isReconnecting = true
 
         scope.launch {
-
-            delay(2000)
-
             try {
-                mqttManager.disconnect()
-            } catch (_: Exception) {}
-
-            try {
+                // JANGAN disconnect dulu — hanya connect
+                // kalau memang sudah disconnected dari broker
                 mqttManager.connect()
+                Log.d(TAG, "Reconnect triggered")
             } catch (e: Exception) {
                 Log.e(TAG, "Reconnect error: ${e.message}")
+            } finally {
+                // Beri jeda sebelum boleh reconnect lagi
+                delay(10_000)
+                isReconnecting = false
             }
-
-            isReconnecting = false
         }
     }
 }

@@ -47,6 +47,10 @@
         android:roundIcon="@drawable/ic_logo"
         android:supportsRtl="true"
         android:theme="@style/Theme.PersonelTracking2026">
+        <service
+            android:name=".core.service.MqttLocationService"
+            android:foregroundServiceType="location"
+            android:exported="false"/>
         <receiver
             android:name=".core.mqtt.BootReceiver"
             android:enabled="true"
