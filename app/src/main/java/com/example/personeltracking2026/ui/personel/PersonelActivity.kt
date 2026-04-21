@@ -57,7 +57,6 @@ class PersonelActivity : BaseActivity() {
     private lateinit var sessionManager: SessionManager
     private lateinit var mapView: MapView
     private lateinit var pagerAdapter: TopPagerAdapter
-    private lateinit var reconnectManager: MqttReconnectManager
 
     private val viewModel: PersonelViewModel by viewModels {
         PersonelViewModel.Factory(
@@ -125,6 +124,8 @@ class PersonelActivity : BaseActivity() {
 
         setContentView(binding.root)
 
+        requestBatteryOptimizationExemption()
+
         pagerAdapter = TopPagerAdapter()
         binding.viewPagerTop.adapter = pagerAdapter
 
@@ -139,8 +140,6 @@ class PersonelActivity : BaseActivity() {
         supportActionBar?.setDisplayShowTitleEnabled(false)
 
         binding.btnOverflow.setOnClickListener { showOverflowMenu(it) }
-
-        reconnectManager = MqttReconnectManager(this, viewModel.mqttManager)
 
         val savedType = getSharedPreferences("map_settings", MODE_PRIVATE)
             .getString("map_type", MapTypeManager.MapType.STANDARD.name)
@@ -184,8 +183,6 @@ class PersonelActivity : BaseActivity() {
     override fun onStart() {
         super.onStart()
 
-        reconnectManager.start()
-
         viewModel.registerBatteryReceiver(this)
         binding.mapView.onStart()
         updateMqttUI()
@@ -195,8 +192,6 @@ class PersonelActivity : BaseActivity() {
     // FIX ANR: unregister battery receiver di onStop
     override fun onStop() {
         super.onStop()
-
-        reconnectManager.stop()
 
         viewModel.unregisterBatteryReceiver(this)
         binding.mapView.onStop()
@@ -584,7 +579,6 @@ class PersonelActivity : BaseActivity() {
 
     private fun startLocationUpdates() {
         viewModel.startLocationUpdates(2000)
-        viewModel.startPublishing()
     }
 
     private fun parseIntervalToMs(interval: String): Long {

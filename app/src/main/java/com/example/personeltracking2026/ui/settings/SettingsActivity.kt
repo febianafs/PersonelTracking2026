@@ -1,7 +1,6 @@
 package com.example.personeltracking2026.ui.settings
 
 import android.content.res.ColorStateList
-import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.widget.ArrayAdapter
@@ -10,11 +9,13 @@ import androidx.core.graphics.toColorInt
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import android.content.Intent
 import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.base.BaseActivity
 import com.example.personeltracking2026.core.mqtt.MqttConfig
 import com.example.personeltracking2026.core.mqtt.MqttConfigManager
 import com.example.personeltracking2026.core.mqtt.MqttManager
+import com.example.personeltracking2026.core.utils.Constants
 import com.example.personeltracking2026.databinding.ActivitySettingsBinding
 
 class SettingsActivity : BaseActivity() {
@@ -90,9 +91,16 @@ class SettingsActivity : BaseActivity() {
         binding.actInterval.setOnItemClickListener { _, _, _, _ ->
             val interval = binding.actInterval.text.toString()
 
-            getSharedPreferences("mqtt_settings", MODE_PRIVATE).edit {
-                putString("interval", interval)
+            getSharedPreferences(Constants.PREFS_MQTT_SETTINGS, MODE_PRIVATE).edit {
+                putString(Constants.KEY_INTERVAL, interval)
             }
+
+            // kirim broadcast ke service agar langsung update
+            sendBroadcast(
+                Intent(Constants.ACTION_INTERVAL_CHANGED).apply {
+                    putExtra(Constants.EXTRA_INTERVAL_TEXT, interval)
+                }
+            )
 
             showSavedIndicator()
         }
@@ -102,17 +110,19 @@ class SettingsActivity : BaseActivity() {
 
     private fun loadSettings() {
         val config = MqttConfigManager(this).load()
-        binding.etServer!!.setText(config.host)
+        binding.etServer.setText(config.host)
         binding.etTcp!!.setText(config.tcpPort.toString())
         binding.etWs!!.setText(config.wsPort.toString())
         binding.etUsername!!.setText(config.username)
         binding.etPassword!!.setText(config.password)
 
-        val savedInterval = getSharedPreferences("mqtt_settings", MODE_PRIVATE)
-            .getString("interval", "")
-        if (!savedInterval.isNullOrEmpty()) {
-            binding.actInterval.setText(savedInterval, false)
-        }
+        val prefs = getSharedPreferences(Constants.PREFS_MQTT_SETTINGS, MODE_PRIVATE)
+        val savedInterval = prefs.getString(
+            Constants.KEY_INTERVAL,
+            Constants.DEFAULT_INTERVAL_TEXT
+        ) ?: Constants.DEFAULT_INTERVAL_TEXT
+
+        binding.actInterval.setText(savedInterval, false)
     }
 
     // ─── BUTTONS ─────────────────────────────────────────────────────────────

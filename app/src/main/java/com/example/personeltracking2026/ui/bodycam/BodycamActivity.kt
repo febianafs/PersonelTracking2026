@@ -137,6 +137,8 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
         binding = ActivityBodycamBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        requestBatteryOptimizationExemption()
+
         // Cek Device Serial Number
         val deviceId = DeviceIdProvider.getDeviceId(this)
         Log.d("DEVICE_ID", deviceId)

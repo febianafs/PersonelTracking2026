@@ -1,12 +1,17 @@
 package com.example.personeltracking2026.ui.splash
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.view.animation.AnimationUtils
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.personeltracking2026.R
+import com.example.personeltracking2026.core.service.MqttLocationService
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.data.repository.AuthRepository
 import com.example.personeltracking2026.data.repository.Result
@@ -17,6 +22,7 @@ import com.example.personeltracking2026.ui.main.MainActivity
 import com.example.personeltracking2026.ui.personel.PersonelActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.provider.Settings
 
 @SuppressLint("CustomSplashScreen")
 class SplashActivity : AppCompatActivity() {
@@ -32,13 +38,16 @@ class SplashActivity : AppCompatActivity() {
 
         sessionManager = SessionManager(this)
 
-        // Animasi logo masuk
         val fadeIn = AnimationUtils.loadAnimation(this, R.anim.splash_fade_in)
         binding.imgLogo.startAnimation(fadeIn)
 
         lifecycleScope.launch {
-            // Minimal 2 detik splash ditampilkan
             val minDelay = launch { delay(2000) }
+
+            // Start service setelah Activity benar-benar visible
+            // delay singkat memastikan Activity sudah resumed
+            delay(500)
+            MqttLocationService.startService(this@SplashActivity)
 
             val destination = if (sessionManager.isLoggedIn()) {
                 validateToken()
@@ -46,10 +55,8 @@ class SplashActivity : AppCompatActivity() {
                 LoginActivity::class.java
             }
 
-            // Tunggu minimal delay selesai
             minDelay.join()
 
-            // Animasi fade out sebelum pindah
             binding.root.animate()
                 .alpha(0f)
                 .setDuration(300)
@@ -67,11 +74,10 @@ class SplashActivity : AppCompatActivity() {
 
         return when (val result = authRepository.checkToken(token)) {
             is Result.Success -> {
-                // Token valid — cek role
                 when (sessionManager.getRole()) {
                     SessionManager.ROLE_PERSONEL -> PersonelActivity::class.java
-                    SessionManager.ROLE_BODYCAM -> BodycamActivity::class.java
-                    else -> MainActivity::class.java
+                    SessionManager.ROLE_BODYCAM  -> BodycamActivity::class.java
+                    else                         -> MainActivity::class.java
                 }
             }
             is Result.Error -> {
@@ -79,11 +85,10 @@ class SplashActivity : AppCompatActivity() {
                     sessionManager.clearSession()
                     LoginActivity::class.java
                 } else {
-                    // Tidak bisa konek — lanjut dengan token lokal
                     when (sessionManager.getRole()) {
                         SessionManager.ROLE_PERSONEL -> PersonelActivity::class.java
-                        SessionManager.ROLE_BODYCAM -> BodycamActivity::class.java
-                        else -> MainActivity::class.java
+                        SessionManager.ROLE_BODYCAM  -> BodycamActivity::class.java
+                        else                         -> MainActivity::class.java
                     }
                 }
             }

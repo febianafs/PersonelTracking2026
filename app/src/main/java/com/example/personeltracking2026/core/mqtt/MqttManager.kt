@@ -142,7 +142,8 @@ class MqttManager(private val context: Context) {
             .password(pass.toByteArray(StandardCharsets.UTF_8))
             .applySimpleAuth()
 
-        // Build client
+        // Build client tanpa disconnectedListener
+        // Reconnect dihandle oleh MqttReconnectManager
         client = builder.buildAsync()
 
         client?.connect()
