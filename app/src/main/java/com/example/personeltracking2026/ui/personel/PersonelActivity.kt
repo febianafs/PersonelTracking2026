@@ -28,6 +28,7 @@ import com.example.personeltracking2026.core.mqtt.MqttPayloadBuilder
 import com.example.personeltracking2026.core.mqtt.MqttReconnectManager
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.core.sos.SosManager
+import com.example.personeltracking2026.data.model.LocationData
 import com.example.personeltracking2026.data.model.PersonelData
 import com.example.personeltracking2026.data.repository.LocationRepository
 import com.example.personeltracking2026.data.repository.PersonelRepository
@@ -75,6 +76,8 @@ class PersonelActivity : BaseActivity() {
     private var currentLat = zoneCenterLat
     private var currentLon = zoneCenterLon
     private var mapLibreMap: org.maplibre.android.maps.MapLibreMap? = null
+    private var lastAccepted: LocationData? = null
+    private val smoothWindow = ArrayDeque<LocationData>()
 
     // ─── SOS ─────────────────────────────────────────────────────────────────
     private var markerBlinkJob: Job? = null
@@ -599,6 +602,16 @@ class PersonelActivity : BaseActivity() {
             }
             else -> 5000L
         }
+    }
+
+    private fun distance(a: LocationData, b: LocationData): Float {
+        val results = FloatArray(1)
+        android.location.Location.distanceBetween(
+            a.lat, a.lon,
+            b.lat, b.lon,
+            results
+        )
+        return results[0]
     }
 
     // ─── VITAL SIGNS UI ──────────────────────────────────────────────────────
