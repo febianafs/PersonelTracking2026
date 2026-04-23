@@ -13,7 +13,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.personeltracking2026.App
-import com.example.personeltracking2026.core.mqtt.MqttManager
 import com.example.personeltracking2026.core.mqtt.MqttPayloadBuilder
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.data.model.LocationData
@@ -179,6 +178,7 @@ class PersonelViewModel(
                     val data = result.data
                     // Simpan detail ke session supaya tersedia meski API gagal berikutnya
                     sessionManager.savePersonelDetail(
+                        nrp       = data.nrp,
                         rank      = data.rank?.name,
                         unit      = data.unit?.name,
                         battalion = data.batalyon?.name,
@@ -322,6 +322,12 @@ class PersonelViewModel(
                 timestamp  = System.currentTimeMillis(),
                 deviceName = deviceName.ifEmpty { it.deviceName }
             )
+        }
+
+        val app = getApplication<Application>()
+        if (app is com.example.personeltracking2026.App) {
+            app.currentHeartRate   = bpm
+            app.currentHeartRateTs = System.currentTimeMillis()
         }
     }
 

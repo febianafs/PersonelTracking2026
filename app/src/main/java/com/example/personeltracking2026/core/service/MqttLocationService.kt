@@ -237,14 +237,19 @@ class MqttLocationService : Service() {
 
             val nowMs = System.currentTimeMillis()
 
+            // Baca HR dari App-level state (diisi oleh PersonelViewModel via BLE)
+            val app = application as? com.example.personeltracking2026.App
+            val hr    = app?.currentHeartRate   ?: 0
+            val hrTs  = app?.currentHeartRateTs?.takeIf { it > 0 } ?: nowMs
+
             val payload = MqttPayloadBuilder.buildDataPayload(
                 session      = sessionManager,
                 serialNumber = serialNumber,
                 lat          = lat,
                 lon          = lon,
                 gpsTimestamp = nowMs,
-                heartrate    = 0,
-                heartrateTs  = nowMs,
+                heartrate    = hr,
+                heartrateTs  = hrTs,
                 batteryLevel = getBatteryLevel()
             )
 

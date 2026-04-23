@@ -9,6 +9,7 @@ data class PersonelDetailResponse(
 
 data class PersonelData(
     val id: Int,
+    val nrp: String?,
     val email: String?,
     val image: String?,
     val batalyon: UnitItem?,
