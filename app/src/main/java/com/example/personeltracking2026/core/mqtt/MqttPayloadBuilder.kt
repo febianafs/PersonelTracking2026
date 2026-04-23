@@ -71,7 +71,8 @@ object MqttPayloadBuilder {
         session: SessionManager,
         serialNumber: String,
         lat: Double,
-        lon: Double
+        lon: Double,
+        sos: Int
     ): RadioSosPayload {
         val nowSec = System.currentTimeMillis() / 1000
         return RadioSosPayload(
@@ -80,7 +81,7 @@ object MqttPayloadBuilder {
             id           = session.getUserId()?.toString() ?: "",
             name         = session.getName() ?: "",
             avatar       = session.getAvatar() ?: "",
-            sos          = 1,
+            sos          = sos,
             latitude     = lat,
             longitude    = lon
         )

@@ -229,7 +229,7 @@ class PersonelViewModel(
                 val locationData = kotlinResult.getOrNull()
                 val error        = kotlinResult.exceptionOrNull()
 
-                if (locationData != null) {
+                if (locationData != null) {publishJob
                     val filteredLoc = processLocation(locationData) ?: return@collect
 
                     _locationState.value = LocationState(
@@ -336,16 +336,16 @@ class PersonelViewModel(
         }
 
         // --- OUTLIER FILTER ---
-        val maxJump = 10f + 3f * dt
+        val maxJump = 8f + 2f * dt
         if (dist > maxJump) {
             Log.d("FILTER", "OUTLIER: $dist")
             return null
         }
 
         // 2. DYNAMIC DISTANCE FILTER
-        val smallMove = 3f + dt
+        val smallMove = 6f + dt
         if (!moving && dist < smallMove) {
-            val tau = 5f
+            val tau = 6f
             val alpha = dt / (tau + dt)
             val blendedLat = last.lat + alpha * (newLoc.lat - last.lat)
             val blendedLon = last.lon + alpha * (newLoc.lon - last.lon)
@@ -382,7 +382,7 @@ class PersonelViewModel(
         return finalLoc
     }
 
-    fun publishSos() {
+    fun publishSos(sosValue: Int) {
         val loc = _locationState.value.data ?: return
 
         val serialNumber = Settings.Secure.getString(
@@ -394,7 +394,8 @@ class PersonelViewModel(
             session      = sessionManager,
             serialNumber = serialNumber,
             lat          = loc.lat,
-            lon          = loc.lon
+            lon          = loc.lon,
+            sos          = sosValue
         )
         mqttManager.publishSos(payload)
     }
@@ -486,7 +487,7 @@ class PersonelViewModel(
         val speed = dist / timeSec
 
         // kombinasi speed + jarak minimum
-        return speed > 1f || dist > 6f
+        return speed > 1.5f || dist > 8f
     }
 
     // HELPER SMOOTHING

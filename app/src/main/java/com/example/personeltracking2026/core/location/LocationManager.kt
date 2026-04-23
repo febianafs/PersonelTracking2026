@@ -167,7 +167,6 @@ class AppLocationManager(private val context: Context) {
         locationManager = null
         bestLocation = null
     }
-
     // ─── HELPER ─────────────────────────────────────────────────────────────
 
     private fun hasPermission(): Boolean {
