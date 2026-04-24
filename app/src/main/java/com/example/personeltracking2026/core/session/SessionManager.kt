@@ -21,6 +21,7 @@ class SessionManager(context: Context) {
         private const val KEY_BATTALION  = "battalion"
         private const val KEY_SQUAD      = "squad"
         private const val KEY_AVATAR     = "avatar"
+        private const val KEY_NRP        = "nrp"
 
         const val ROLE_PERSONEL = "personel"
         const val ROLE_BODYCAM  = "bodycam"
@@ -37,6 +38,10 @@ class SessionManager(context: Context) {
 
     fun saveRole(role: String) {
         prefs.edit().putString(KEY_ROLE, role).apply()
+    }
+
+    fun saveNrp(nrp: String) {
+        prefs.edit().putString(KEY_NRP, nrp).apply()
     }
 
     fun getToken()   : String? = prefs.getString(KEY_TOKEN, null)
@@ -71,6 +76,7 @@ class SessionManager(context: Context) {
      * Supaya data identity tersedia meski API gagal di sesi berikutnya.
      */
     fun savePersonelDetail(
+        nrp       : String?,
         rank      : String?,
         unit      : String?,
         battalion : String?,
@@ -78,6 +84,7 @@ class SessionManager(context: Context) {
         avatar    : String?
     ) {
         prefs.edit()
+            .putString(KEY_NRP,       nrp       ?: "")
             .putString(KEY_RANK,      rank      ?: "")
             .putString(KEY_UNIT,      unit      ?: "")
             .putString(KEY_BATTALION, battalion ?: "")
@@ -91,6 +98,7 @@ class SessionManager(context: Context) {
     fun getBattalion() : String = prefs.getString(KEY_BATTALION, "") ?: ""
     fun getSquad()     : String = prefs.getString(KEY_SQUAD,     "") ?: ""
     fun getAvatar()    : String = prefs.getString(KEY_AVATAR,    "") ?: ""
+    fun getNrp()       : String = prefs.getString(KEY_NRP,       "") ?: ""
 
     // ─── CLEAR ───────────────────────────────────────────────────────────────
 

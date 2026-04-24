@@ -6,16 +6,12 @@ import android.content.Intent
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.personeltracking2026.core.mqtt.worker.MqttKickWorker
+import com.example.personeltracking2026.core.service.MqttLocationService
 import java.util.concurrent.TimeUnit
 
 class BootReceiver : BroadcastReceiver() {
-
     override fun onReceive(ctx: Context, intent: Intent) {
-
-        val oneTime = OneTimeWorkRequestBuilder<MqttKickWorker>()
-            .setInitialDelay(15, TimeUnit.SECONDS)
-            .build()
-
-        WorkManager.getInstance(ctx).enqueue(oneTime)
+        // Start service saat device boot
+        MqttLocationService.startService(ctx)
     }
 }

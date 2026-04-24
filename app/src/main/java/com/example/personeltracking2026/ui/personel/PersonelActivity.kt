@@ -2,6 +2,7 @@ package com.example.personeltracking2026.ui.personel
 
 import android.Manifest
 import android.content.Context
+import android.content.Context.MODE_PRIVATE
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -15,6 +16,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
+import androidx.core.content.ContextCompat.startActivity
 import androidx.core.content.edit
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
@@ -35,6 +37,7 @@ import com.example.personeltracking2026.data.model.PersonelData
 import com.example.personeltracking2026.data.repository.LocationRepository
 import com.example.personeltracking2026.data.repository.PersonelRepository
 import com.example.personeltracking2026.databinding.ActivityPersonelBinding
+import com.example.personeltracking2026.ui.bluetooth.BluetoothLeService
 import com.example.personeltracking2026.utils.drawableToBitmap
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -138,6 +141,8 @@ class PersonelActivity : BaseActivity() {
 
         setContentView(binding.root)
 
+        requestBatteryOptimizationExemption()
+
         pagerAdapter = TopPagerAdapter()
         binding.viewPagerTop.adapter = pagerAdapter
 
@@ -170,7 +175,7 @@ class PersonelActivity : BaseActivity() {
                 contentResolver,
                 android.provider.Settings.Secure.ANDROID_ID
             ) ?: "unknown",
-            locationProvider = { Pair(currentLat, currentLon) }
+            locationProvider = { Pair(app.currentLat, app.currentLon) }
         )
 
         binding.btnZoomIn.setOnClickListener {
@@ -197,6 +202,7 @@ class PersonelActivity : BaseActivity() {
     override fun onStart() {
         super.onStart()
 
+        viewModel.registerBatteryReceiver(this)
         binding.mapView.onStart()
         updateMqttUI()
 
@@ -281,7 +287,6 @@ class PersonelActivity : BaseActivity() {
                     SosManager.isActive.collect { isActive ->
                         if (isActive) {
                             startMarkerBlink()
-
                         } else {
                             stopMarkerBlink()
                         }
@@ -381,9 +386,29 @@ class PersonelActivity : BaseActivity() {
                 }
 
                 // Heart rate dari BLE
+//                launch {
+//                    viewModel.heartRateState.collect { state ->
+//                        updateHeartRate(state.bpm)
+//                    }
+//                }
+                // Heart rate dari BLE — GANTI BLOCK INI
                 launch {
-                    viewModel.heartRateState.collect { state ->
-                        updateHeartRate(state.bpm)
+                    // Observe koneksi BLE
+                    launch {
+                        BluetoothLeService.connectionState.collect { state ->
+                            val isConnected = state == BluetoothLeService.ConnectionState.CONNECTED
+                            val deviceName  = BluetoothLeService.connectedDevice.value?.name ?: "--"
+
+                            pagerAdapter.bleConnected  = isConnected
+                            pagerAdapter.bleDeviceName = if (isConnected) deviceName else "--"
+                            pagerAdapter.notifyItemChanged(1)
+                        }
+                    }
+
+                    // Observe BPM realtime
+                    BluetoothLeService.bpmValue.collect { bpm ->
+                        pagerAdapter.bleBpm = bpm
+                        pagerAdapter.notifyItemChanged(1)
                     }
                 }
             }

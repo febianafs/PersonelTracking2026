@@ -40,7 +40,7 @@ object MqttPayloadBuilder {
 
         val identity = IdentityPayload(
             id        = session.getUserId()?.toString() ?: "",
-            nrp       = session.getUsername() ?: "",
+            nrp       = session.getNrp() ?: "",
             name      = session.getName() ?: "",
             rank      = session.getRank() ?: "",
             unit      = session.getUnit() ?: "",

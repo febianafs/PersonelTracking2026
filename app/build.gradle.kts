@@ -99,6 +99,7 @@ dependencies {
 
     //room database
     implementation("androidx.room:room-runtime:2.8.4")
+    implementation(libs.androidx.activity)
     kapt("androidx.room:room-compiler:2.8.4")
 
     //WorkManager
