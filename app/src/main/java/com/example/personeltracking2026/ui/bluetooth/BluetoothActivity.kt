@@ -1,93 +1,425 @@
 package com.example.personeltracking2026.ui.bluetooth
 
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.le.BluetoothLeScanner
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanResult
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
-import android.widget.ImageButton
-import android.widget.TextView
-import android.widget.Toast
+import android.os.Handler
+import android.os.IBinder
+import android.os.Looper
+import android.util.Log
+import android.view.View
+import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.example.personeltracking2026.R
+import kotlinx.coroutines.launch
 
 class BluetoothActivity : AppCompatActivity() {
 
+    // ── Views ─────────────────────────────────────────────────────────────
     private lateinit var switchBluetooth: SwitchCompat
     private lateinit var tvToggleLabel: TextView
     private lateinit var btnBack: ImageButton
+    private lateinit var btnRefresh: ImageButton
+    private lateinit var layoutBluetoothOff: LinearLayout
+    private lateinit var layoutScanning: LinearLayout
+    private lateinit var layoutConnectedInfo: LinearLayout
+    private lateinit var layoutDeviceList: LinearLayout
+    private lateinit var tvDeviceCount: TextView
+    private lateinit var tvScanStatus: TextView
+    private lateinit var bluetoothScanView: BluetoothScanView
+    private lateinit var tvConnectedName: TextView
+    private lateinit var tvConnectedMac: TextView
+    private lateinit var tvBpm: TextView
+    private lateinit var tvHeartStatus: TextView
 
+    // ── Bluetooth ─────────────────────────────────────────────────────────
     private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    private var bluetoothLeScanner: BluetoothLeScanner? = null
+    private var isScanning = false
 
+    // ── Service ───────────────────────────────────────────────────────────
+    private var bleService: BluetoothLeService? = null
+    private var isBound = false
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as BluetoothLeService.LocalBinder
+            bleService = binder.getService()
+            isBound = true
+            observeService()
+            syncUIWithService()
+        }
+        override fun onServiceDisconnected(name: ComponentName?) {
+            isBound = false
+            bleService = null
+        }
+    }
+
+    // ── Data ─────────────────────────────────────────────────────────────
+    private val deviceList = mutableListOf<BluetoothDeviceModel>()
+    private lateinit var adapter: BluetoothDeviceAdapter
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    // ══════════════════════════════════════════════════════════════════════
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_bluetooth)
 
-        // INIT VIEW
-        switchBluetooth = findViewById(R.id.switchBluetooth)
-        tvToggleLabel = findViewById(R.id.tvToggleLabel)
-        btnBack = findViewById(R.id.btnBack)
+        initViews()
+        setupAdapter()
+        setupListeners()
 
-        // BACK BUTTON
-        btnBack.setOnClickListener {
-            finish()
+        // Start & bind service
+        val serviceIntent = Intent(this, BluetoothLeService::class.java)
+        ContextCompat.startForegroundService(this, serviceIntent)
+        bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        stopScan()
+        mainHandler.removeCallbacksAndMessages(null)
+        if (isBound) {
+            unbindService(serviceConnection)
+            isBound = false
+        }
+        // JANGAN stop service — biarkan koneksi tetap hidup
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // INIT
+    // ══════════════════════════════════════════════════════════════════════
+
+    private fun initViews() {
+        switchBluetooth     = findViewById(R.id.switchBluetooth)
+        tvToggleLabel       = findViewById(R.id.tvToggleLabel)
+        btnBack             = findViewById(R.id.btnBack)
+        btnRefresh          = findViewById(R.id.btnRefresh)
+        layoutBluetoothOff  = findViewById(R.id.layoutBluetoothOff)
+        layoutScanning      = findViewById(R.id.layoutScanning)
+        layoutConnectedInfo = findViewById(R.id.layoutConnectedInfo)
+        layoutDeviceList    = findViewById(R.id.layoutDeviceList)
+        tvDeviceCount       = findViewById(R.id.tvDeviceCount)
+        tvScanStatus        = findViewById(R.id.tvScanStatus)
+        bluetoothScanView   = findViewById(R.id.bluetoothScanView)
+        tvConnectedName     = findViewById(R.id.tvConnectedName)
+        tvConnectedMac      = findViewById(R.id.tvConnectedMac)
+        tvBpm               = findViewById(R.id.tvBpm)
+        tvHeartStatus       = findViewById(R.id.tvHeartStatus)
+    }
+
+    private fun setupAdapter() {
+        adapter = BluetoothDeviceAdapter(
+            context      = this,
+            onConnect    = { device -> connectToDevice(device) },
+            onDisconnect = { _ -> bleService?.disconnect() }
+        )
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // OBSERVE SERVICE
+    // ══════════════════════════════════════════════════════════════════════
+
+    private fun observeService() {
+        lifecycleScope.launch {
+            BluetoothLeService.connectionState.collect { state ->
+                when (state) {
+                    BluetoothLeService.ConnectionState.CONNECTED -> {
+                        val device = BluetoothLeService.connectedDevice.value
+                        if (device != null) showConnectedInfo(device)
+                        updateDeviceStatesFromService()
+                        updateDeviceList()
+                    }
+                    BluetoothLeService.ConnectionState.CONNECTING -> {
+                        updateDeviceStatesFromService()
+                        updateDeviceList()
+                    }
+                    BluetoothLeService.ConnectionState.DISCONNECTED -> {
+                        hideConnectedInfo()
+                        updateDeviceStatesFromService()
+                        updateDeviceList()
+                    }
+                }
+            }
         }
 
-        // SET STATE AWAL DARI DEVICE
+        lifecycleScope.launch {
+            BluetoothLeService.bpmValue.collect { bpm ->
+                if (bpm > 0) updateBpm(bpm)
+            }
+        }
+    }
+
+    private fun syncUIWithService() {
         val isBluetoothOn = bluetoothAdapter?.isEnabled == true
+        switchBluetooth.setOnCheckedChangeListener(null)
         switchBluetooth.isChecked = isBluetoothOn
-        updateUI(isBluetoothOn)
+        setupSwitchListener()
+        updateToggleUI(isBluetoothOn)
 
-        // LISTENER SWITCH
+        when {
+            !isBluetoothOn -> showOffState()
+            BluetoothLeService.connectionState.value == BluetoothLeService.ConnectionState.CONNECTED -> {
+                showScanningLayout()
+                val device = BluetoothLeService.connectedDevice.value
+                if (device != null) {
+                    if (deviceList.none { it.address == device.address }) {
+                        deviceList.add(device.copy(state = DeviceState.CONNECTED))
+                    } else {
+                        deviceList.find { it.address == device.address }?.state = DeviceState.CONNECTED
+                    }
+                    showConnectedInfo(device)
+                    updateDeviceList()
+                }
+                tvScanStatus.text = "Perangkat terhubung"
+                tvDeviceCount.visibility = View.VISIBLE
+                tvDeviceCount.text = "${deviceList.size} perangkat ditemukan"
+                // Sudah connected — tidak perlu scan ulang
+                bluetoothScanView.stopAnimation()
+            }
+            else -> {
+                showScanningLayout()
+                startScan()
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // LISTENERS
+    // ══════════════════════════════════════════════════════════════════════
+
+    private fun setupListeners() {
+        btnBack.setOnClickListener { finish() }
+        btnRefresh.setOnClickListener {
+            if (hasPermission()) {
+                stopScan()
+                deviceList.clear()
+                updateDeviceList()
+                startScan()
+            }
+        }
+        setupSwitchListener()
+    }
+
+    private fun setupSwitchListener() {
         switchBluetooth.setOnCheckedChangeListener { _, isChecked ->
-
-            if (!hasBluetoothPermission()) {
-                requestPermissionLauncher.launch(android.Manifest.permission.BLUETOOTH_CONNECT)
-                switchBluetooth.isChecked = !isChecked // balikin state
+            if (!hasPermission()) {
+                requestPermissions()
+                switchBluetooth.isChecked = !isChecked
                 return@setOnCheckedChangeListener
             }
 
-            try {
-                if (isChecked) {
-                    bluetoothAdapter?.enable()
-                } else {
-                    bluetoothAdapter?.disable()
-                }
-                updateUI(isChecked)
-
-            } catch (e: SecurityException) {
-                e.printStackTrace()
+            if (isChecked) {
+                // Android 10+ tidak bisa enable() langsung — pakai Intent
+                val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                enableBluetoothLauncher.launch(enableBtIntent)
+            } else {
+                // Putuskan koneksi BLE
+                bleService?.disconnect()
+                stopScan()
+                deviceList.clear()
+                showOffState()
+                updateToggleUI(false)
+                Toast.makeText(
+                    this,
+                    "Untuk mematikan Bluetooth, gunakan pengaturan sistem",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
     }
 
-    // UPDATE UI
-    private fun updateUI(isOn: Boolean) {
+    // ══════════════════════════════════════════════════════════════════════
+    // UI STATE
+    // ══════════════════════════════════════════════════════════════════════
+
+    private fun showOffState() {
+        layoutBluetoothOff.visibility  = View.VISIBLE
+        layoutScanning.visibility      = View.GONE
+        layoutConnectedInfo.visibility = View.GONE
+        layoutDeviceList.visibility    = View.GONE
+        bluetoothScanView.stopAnimation()
+    }
+
+    private fun showScanningLayout() {
+        layoutBluetoothOff.visibility = View.GONE
+        layoutScanning.visibility     = View.VISIBLE
+        layoutDeviceList.visibility   = View.VISIBLE
+        bluetoothScanView.startAnimation()
+    }
+
+    private fun updateToggleUI(isOn: Boolean) {
         if (isOn) {
             tvToggleLabel.text = "Aktif"
-            tvToggleLabel.setTextColor(
-                ContextCompat.getColor(this, R.color.primary)
-            )
+            tvToggleLabel.setTextColor(ContextCompat.getColor(this, R.color.primary))
         } else {
             tvToggleLabel.text = "Non-aktif"
-            tvToggleLabel.setTextColor(
-                ContextCompat.getColor(this, R.color.gray)
-            )
+            tvToggleLabel.setTextColor(ContextCompat.getColor(this, R.color.gray))
         }
     }
 
-    private fun hasBluetoothPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            this,
-            android.Manifest.permission.BLUETOOTH_CONNECT
-        ) == PackageManager.PERMISSION_GRANTED
+    private fun showConnectedInfo(device: BluetoothDeviceModel) {
+        layoutConnectedInfo.visibility = View.VISIBLE
+        tvConnectedName.text = device.name.ifBlank { "Unknown" }
+        tvConnectedMac.text  = device.address
     }
 
-    private val requestPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-            if (!isGranted) {
-                Toast.makeText(this, "Permission Bluetooth diperlukan", Toast.LENGTH_SHORT).show()
+    private fun hideConnectedInfo() {
+        layoutConnectedInfo.visibility = View.GONE
+        tvBpm.text = "--"
+    }
+
+    private fun updateBpm(bpm: Int) {
+        tvBpm.text = bpm.toString()
+        val (statusText, colorRes) = when {
+            bpm < 60  -> "Di Bawah Normal" to R.color.orange
+            bpm > 100 -> "Di Atas Normal"  to R.color.red
+            else      -> "Normal"           to R.color.gray
+        }
+        tvHeartStatus.text = statusText
+        tvHeartStatus.setTextColor(ContextCompat.getColor(this, colorRes))
+    }
+
+    private fun updateDeviceList() {
+        val count = deviceList.size
+        tvDeviceCount.visibility = if (count > 0) View.VISIBLE else View.GONE
+        if (count > 0) tvDeviceCount.text = "$count perangkat ditemukan"
+        adapter.renderInto(layoutDeviceList, deviceList)
+    }
+
+    private fun updateDeviceStatesFromService() {
+        val connAddr = BluetoothLeService.connectedDevice.value?.address
+        val svcState = BluetoothLeService.connectionState.value
+        deviceList.forEach { d ->
+            d.state = when {
+                d.address == connAddr && svcState == BluetoothLeService.ConnectionState.CONNECTED  -> DeviceState.CONNECTED
+                d.address == connAddr && svcState == BluetoothLeService.ConnectionState.CONNECTING -> DeviceState.CONNECTING
+                else -> DeviceState.IDLE
             }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // BLE SCAN
+    // ══════════════════════════════════════════════════════════════════════
+
+    private fun startScan() {
+        if (!hasPermission()) return
+        bluetoothLeScanner = bluetoothAdapter?.bluetoothLeScanner
+        isScanning = true
+        tvScanStatus.text = "Mencari perangkat . . ."
+        bluetoothScanView.startAnimation()
+
+        try {
+            bluetoothLeScanner?.startScan(scanCallback)
+        } catch (e: SecurityException) {
+            Log.e("BT", "startScan: ${e.message}")
+        }
+
+        mainHandler.postDelayed({
+            if (isScanning) {
+                stopScan()
+                tvScanStatus.text = "Pencarian selesai"
+                bluetoothScanView.stopAnimation()
+            }
+        }, 30_000)
+    }
+
+    private fun stopScan() {
+        if (!isScanning) return
+        isScanning = false
+        try {
+            if (hasPermission()) bluetoothLeScanner?.stopScan(scanCallback)
+        } catch (e: SecurityException) { }
+    }
+
+    private val scanCallback = object : ScanCallback() {
+        override fun onScanResult(callbackType: Int, result: ScanResult) {
+            val device = result.device ?: return
+            val name = try {
+                if (hasPermission()) device.name ?: return else return
+            } catch (e: SecurityException) { return }
+
+            val address = device.address
+            if (deviceList.none { it.address == address }) {
+                val model = BluetoothDeviceModel(name, address, result.rssi)
+                if (address == BluetoothLeService.connectedDevice.value?.address) {
+                    model.state = DeviceState.CONNECTED
+                }
+                deviceList.add(model)
+                deviceList.sortByDescending { it.rssi }
+                runOnUiThread { updateDeviceList() }
+            }
+        }
+
+        override fun onScanFailed(errorCode: Int) {
+            runOnUiThread { tvScanStatus.text = "Gagal mencari perangkat ($errorCode)" }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // CONNECT
+    // ══════════════════════════════════════════════════════════════════════
+
+    private fun connectToDevice(deviceModel: BluetoothDeviceModel) {
+        val btAdapter = bluetoothAdapter ?: return
+        deviceModel.state = DeviceState.CONNECTING
+        updateDeviceList()
+        bleService?.connect(deviceModel, btAdapter)
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // PERMISSION
+    // ══════════════════════════════════════════════════════════════════════
+
+    private fun hasPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.BLUETOOTH_SCAN)    == PackageManager.PERMISSION_GRANTED &&
+                    ContextCompat.checkSelfPermission(this, android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun requestPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            requestPermissionLauncher.launch(arrayOf(
+                android.Manifest.permission.BLUETOOTH_SCAN,
+                android.Manifest.permission.BLUETOOTH_CONNECT
+            ))
+        } else {
+            requestPermissionLauncher.launch(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION))
+        }
+    }
+
+    private val enableBluetoothLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            val isOn = bluetoothAdapter?.isEnabled == true
+            switchBluetooth.setOnCheckedChangeListener(null)
+            switchBluetooth.isChecked = isOn
+            setupSwitchListener()
+            updateToggleUI(isOn)
+            if (isOn) {
+                showScanningLayout()
+                startScan()
+            }
+        }
+
+    private val requestPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+            if (results.values.all { it }) syncUIWithService()
+            else Toast.makeText(this, "Permission Bluetooth diperlukan", Toast.LENGTH_SHORT).show()
         }
 }
