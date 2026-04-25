@@ -52,7 +52,13 @@ class TopPagerAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 val layoutRes = if (isLandscape) R.layout.personel_items_land else R.layout.personel_items
                 ProfileVH(inflater.inflate(layoutRes, parent, false))
             }
-            TYPE_VITAL -> VitalVH(inflater.inflate(R.layout.vital_items, parent, false))
+            TYPE_VITAL -> {
+                val layoutRes = if (isLandscape)
+                    R.layout.vital_items_land
+                else
+                    R.layout.vital_items
+                VitalVH(inflater.inflate(layoutRes, parent, false))
+            }
             TYPE_MQTT -> {
                 val layoutRes = if (isLandscape)
                     R.layout.mqtt_items_land
@@ -119,7 +125,7 @@ class TopPagerAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         // View BLE info di vital_items.xml
         private val tvDeviceName  = itemView.findViewById<TextView?>(R.id.tvDeviceName)
         private val tvBleStatus   = itemView.findViewById<TextView?>(R.id.tvBleStatus)
-        private val tvBpmCategory = itemView.findViewById<TextView?>(R.id.tvBpmCategory)
+//        private val tvBpmCategory = itemView.findViewById<TextView?>(R.id.tvBpmCategory)
 
         fun bind(
             heartRate: Int,
@@ -146,8 +152,8 @@ class TopPagerAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 displayBpm > 100 -> "Di Atas Normal"  to "#FF5252"
                 else             -> "Normal"           to "#69F0AE"
             }
-            tvBpmCategory?.text = categoryText
-            tvBpmCategory?.setTextColor(android.graphics.Color.parseColor(categoryColor))
+//            tvBpmCategory?.text = categoryText
+//            tvBpmCategory?.setTextColor(android.graphics.Color.parseColor(categoryColor))
 
             // ── Nama device & status ──────────────────────────────────────
             if (bleConnected) {
