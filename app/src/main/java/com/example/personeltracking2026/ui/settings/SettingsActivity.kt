@@ -1,5 +1,6 @@
 package com.example.personeltracking2026.ui.settings
 
+import android.app.AlertDialog
 import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.View
@@ -21,7 +22,6 @@ import com.example.personeltracking2026.databinding.ActivitySettingsBinding
 class SettingsActivity : BaseActivity() {
 
     private lateinit var binding: ActivitySettingsBinding
-
     private var testMqttManager: MqttManager? = null
 
     private val intervalOptions = listOf(
@@ -40,15 +40,14 @@ class SettingsActivity : BaseActivity() {
         setupIntervalDropdown()
         loadSettings()
         setupButtons()
+        observeMainMqttStatus()   // ← indikator realtime
 
-        // Menambahkan listener untuk RadioGroup (TCP/WebSocket)
         binding.radioGroupConnectionType?.setOnCheckedChangeListener { _, checkedId ->
             when (checkedId) {
                 R.id.radioTcp -> {
                     binding.etTcp?.isEnabled = true
                     binding.etWs?.isEnabled = false
                 }
-
                 R.id.radioWebSocket -> {
                     binding.etTcp?.isEnabled = false
                     binding.etWs?.isEnabled = true
@@ -61,6 +60,34 @@ class SettingsActivity : BaseActivity() {
         super.onDestroy()
         testMqttManager?.disconnect()
         testMqttManager = null
+    }
+
+    // ─── REALTIME STATUS dari MqttManager utama ───────────────────────────
+
+    private fun observeMainMqttStatus() {
+        // Ambil MqttManager utama dari aplikasi (singleton/service)
+        // Sesuaikan dengan cara kamu expose MqttManager di app level
+        val mainMqtt = (application as? com.example.personeltracking2026.App)?.mqttManager
+            ?: return
+
+        // Set status awal saat activity dibuka
+        if (mainMqtt.isConnected()) {
+            updateStatus("Connected", "#69F0AE")
+        } else {
+            updateStatus("Disconnected", "#9E9E9E")
+        }
+
+        // Listen perubahan status realtime
+        mainMqtt.onConnected = {
+            runOnUiThread {
+                if (!isDestroyed && !isFinishing) updateStatus("Connected", "#69F0AE")
+            }
+        }
+        mainMqtt.onDisconnected = {
+            runOnUiThread {
+                if (!isDestroyed && !isFinishing) updateStatus("Disconnected", "#9E9E9E")
+            }
+        }
     }
 
     // ─── UI SETUP ────────────────────────────────────────────────────────────
@@ -87,21 +114,16 @@ class SettingsActivity : BaseActivity() {
             intervalOptions
         )
         binding.actInterval.setAdapter(adapter)
-
         binding.actInterval.setOnItemClickListener { _, _, _, _ ->
             val interval = binding.actInterval.text.toString()
-
             getSharedPreferences(Constants.PREFS_MQTT_SETTINGS, MODE_PRIVATE).edit {
                 putString(Constants.KEY_INTERVAL, interval)
             }
-
-            // kirim broadcast ke service agar langsung update
             sendBroadcast(
                 Intent(Constants.ACTION_INTERVAL_CHANGED).apply {
                     putExtra(Constants.EXTRA_INTERVAL_TEXT, interval)
                 }
             )
-
             showSavedIndicator()
         }
     }
@@ -110,47 +132,70 @@ class SettingsActivity : BaseActivity() {
 
     private fun loadSettings() {
         val config = MqttConfigManager(this).load()
-        binding.etServer.setText(config.host)
-        binding.etTcp!!.setText(config.tcpPort.toString())
-        binding.etWs!!.setText(config.wsPort.toString())
-        binding.etUsername!!.setText(config.username)
-        binding.etPassword!!.setText(config.password)
+        binding.etServer?.setText(config.host)
+        binding.etTcp?.setText(config.tcpPort.toString())
+        binding.etWs?.setText(config.wsPort.toString())
+        binding.etUsername?.setText(config.username)
+        binding.etPassword?.setText(config.password)
+
+        if (config.useWebSocket) {
+            binding.radioWebSocket?.isChecked = true
+            binding.etTcp?.isEnabled = false
+            binding.etWs?.isEnabled = true
+        } else {
+            binding.radioTcp?.isChecked = true
+            binding.etTcp?.isEnabled = true
+            binding.etWs?.isEnabled = false
+        }
 
         val prefs = getSharedPreferences(Constants.PREFS_MQTT_SETTINGS, MODE_PRIVATE)
         val savedInterval = prefs.getString(
             Constants.KEY_INTERVAL,
             Constants.DEFAULT_INTERVAL_TEXT
         ) ?: Constants.DEFAULT_INTERVAL_TEXT
-
         binding.actInterval.setText(savedInterval, false)
     }
 
     // ─── BUTTONS ─────────────────────────────────────────────────────────────
 
     private fun setupButtons() {
-
-        // SAVE CONFIG
-        binding.btnSaveConnection!!.setOnClickListener {
+        binding.btnSaveConnection?.setOnClickListener {
             val config = buildConfigFromInput()
             MqttConfigManager(this).save(config)
-
             showSavedIndicator()
         }
 
-        // TEST CONNECTION
-        binding.btnTestConnection!!.setOnClickListener {
-            // Simpan config sementara sebelum test
+        binding.btnTestConnection?.setOnClickListener {
             val config = buildConfigFromInput()
-            MqttConfigManager(this).save(config)
-
-            updateStatus("Connecting...", "#FFC107")
+            updateTestButtonState(loading = true)
 
             testMqttManager?.disconnect()
             testMqttManager = MqttManager(this).apply {
-                onConnected    = { runOnUiThread { updateStatus("Connected ✓", "#69F0AE") } }
-                onDisconnected = { runOnUiThread { updateStatus("Failed ✗",    "#FF5252") } }
+                onConnected = {
+                    runOnUiThread {
+                        if (!isDestroyed && !isFinishing) {
+                            updateTestButtonState(loading = false)
+                            showConnectionSuccessDialog(config)
+                        }
+                    }
+                }
+                onDisconnected = {
+                    runOnUiThread {
+                        if (!isDestroyed && !isFinishing) {
+                            updateTestButtonState(loading = false)
+                            showConnectionFailedDialog()
+                        }
+                    }
+                }
             }
             testMqttManager?.connect()
+        }
+    }
+
+    private fun updateTestButtonState(loading: Boolean) {
+        binding.btnTestConnection?.apply {
+            isEnabled = !loading
+            text = if (loading) "Testing..." else "Test"
         }
     }
 
@@ -165,13 +210,52 @@ class SettingsActivity : BaseActivity() {
         )
     }
 
+    // ─── DIALOG ──────────────────────────────────────────────────────────────
+
+    private fun showConnectionSuccessDialog(config: MqttConfig) {
+        val connType = if (config.useWebSocket) "WebSocket" else "TCP"
+        val port     = if (config.useWebSocket) config.wsPort else config.tcpPort
+        val maskedPass = if (config.password.isNotBlank())
+            "*".repeat(config.password.length) else "(none)"
+
+        val message = """
+            ✓ Successfully connected to broker
+            
+            Connection Type : $connType
+            Server Host     : ${config.host}
+            Port            : $port
+            Username        : ${config.username.ifBlank { "(none)" }}
+            Password        : $maskedPass
+        """.trimIndent()
+
+        AlertDialog.Builder(this)
+            .setTitle("Connection Info")
+            .setMessage(message)
+            .setPositiveButton("OK") { dialog, _ ->
+                dialog.dismiss()
+                testMqttManager?.disconnect()
+                testMqttManager = null
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    private fun showConnectionFailedDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Connection Failed")
+            .setMessage("Could not connect to broker.\nPlease check your settings and try again.")
+            .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
+            .show()
+    }
+
     // ─── STATUS UI ───────────────────────────────────────────────────────────
 
     private fun updateStatus(text: String, colorHex: String) {
+        if (isDestroyed || isFinishing) return
         val color = colorHex.toColorInt()
-        binding.tvConnectionStatus!!.text = text
-        binding.tvConnectionStatus!!.setTextColor(color)
-        binding.dotConnection!!.backgroundTintList = ColorStateList.valueOf(color)
+        binding.tvConnectionStatus?.text = text
+        binding.tvConnectionStatus?.setTextColor(color)
+        binding.dotConnection?.backgroundTintList = ColorStateList.valueOf(color)
     }
 
     private fun showSavedIndicator() {
