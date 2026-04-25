@@ -28,11 +28,11 @@ object SosManager {
         getLocation    = locationProvider
     }
 
-    fun activate() { _isActive.value = true; publishSos() }
-    fun deactivate() { _isActive.value = false }
+    fun activate() { _isActive.value = true; publishSos(1) }
+    fun deactivate() { _isActive.value = false; publishSos(0) }
     fun toggle() { if (_isActive.value) deactivate() else activate() }
 
-    private fun publishSos() {
+    private fun publishSos(sosValue: Int) {
         val mqtt    = mqttManager ?: return
         val session = sessionManager ?: return
         val (lat, lon) = getLocation?.invoke() ?: return
@@ -41,7 +41,8 @@ object SosManager {
             session      = session,
             serialNumber = serialNumber,
             lat          = lat,
-            lon          = lon
+            lon          = lon,
+            sos          = sosValue
         )
         mqtt.publishSos(payload)
     }

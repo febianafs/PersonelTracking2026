@@ -13,6 +13,8 @@ class App : Application() {
     // Dibaca oleh MqttLocationService saat build payload.
     @Volatile var currentHeartRate   : Int  = 0
     @Volatile var currentHeartRateTs : Long = 0L
+    @Volatile var currentLat: Double = 0.0
+    @Volatile var currentLon: Double = 0.0
 
     override fun onCreate() {
         super.onCreate()

@@ -13,10 +13,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.personeltracking2026.App
+import com.example.personeltracking2026.BuildConfig
 import com.example.personeltracking2026.core.mqtt.MqttPayloadBuilder
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.data.model.LocationData
 import com.example.personeltracking2026.data.model.PersonelData
+import com.example.personeltracking2026.data.model.RadioDataPayload
 import com.example.personeltracking2026.data.repository.LocationRepository
 import com.example.personeltracking2026.data.repository.PersonelRepository
 import com.example.personeltracking2026.data.repository.Result
@@ -71,6 +73,41 @@ class PersonelViewModel(
 //            }
 //        }
 //    }
+    // LOG CSV START
+    private val rawFile by lazy {
+        File(
+            getApplication<Application>().getExternalFilesDir(null),
+            "gps_filtered.csv"
+        ).apply {
+            if (!exists()) {
+                createNewFile()
+                writeText("timestamp,lat,lon,accuracy\n")
+            }
+        }
+    }
+    private val publishFile by lazy {
+        File(
+            getApplication<Application>().getExternalFilesDir(null),
+            "gps_publish.csv"
+        ).apply {
+            if (!exists()) {
+                createNewFile()
+                writeText("timestamp,lat,lon,accuracy\n")
+            }
+        }
+    }
+
+    fun saveFilteredCsv(loc: LocationData) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                FileWriter(rawFile, true).use { writer ->
+                    writer.append("${loc.timestamp},${loc.lat},${loc.lon},${loc.accuracy}\n")
+                }
+            } catch (e: Exception) {
+                Log.e("CSV_FILTERED", "Error", e)
+            }
+        }
+    }
 
 //    fun saveToCsv(
 //        timestamp: Long,
@@ -88,6 +125,19 @@ class PersonelViewModel(
 //            }
 //        }
 //    }
+    fun savePublishCsv(loc: LocationData) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                FileWriter(publishFile, true).use { writer ->
+                    writer.append("${loc.timestamp},${loc.lat},${loc.lon},${loc.accuracy}\n")
+                }
+            } catch (e: Exception) {
+                Log.e("CSV_PUBLISH", "Error", e)
+            }
+        }
+    }
+    // LOG CSV END
+
     companion object {
         private const val ZONE_CENTER_LAT    = -7.868729
         private const val ZONE_CENTER_LON    = 105.643117
@@ -98,6 +148,8 @@ class PersonelViewModel(
     private var lastLocation: LocationData? = null
     private var publishJob: Job? = null
     private val intervalFlow = MutableStateFlow(5000L)
+    private var lastAccepted: LocationData? = null
+    private val smoothWindow = ArrayDeque<LocationData>()
 
     // ─── STATE FLOWS ─────────────────────────────────────────────────────────
 
@@ -208,15 +260,17 @@ class PersonelViewModel(
                 val locationData = kotlinResult.getOrNull()
                 val error        = kotlinResult.exceptionOrNull()
 
-                if (locationData != null) {
-                    // Simpan last location
-                    lastLocation = locationData
+                if (locationData != null) {publishJob
+                    val filteredLoc = processLocation(locationData) ?: return@collect
 
                     _locationState.value = LocationState(
-                        data        = locationData,
-                        gpsStrength = accuracyToStrength(locationData.accuracy),
-                        isInZone    = checkInZone(locationData.lat, locationData.lon)
+                        data        = filteredLoc,
+                        gpsStrength = accuracyToStrength(filteredLoc.accuracy),
+                        isInZone    = checkInZone(filteredLoc.lat, filteredLoc.lon)
                     )
+                    val app = getApplication<Application>() as App
+                    app.currentLat = filteredLoc.lat
+                    app.currentLon = filteredLoc.lon
 
 //                    saveToCsv(
 //                        locationData.timestamp,
@@ -224,6 +278,11 @@ class PersonelViewModel(
 //                        locationData.lon,
 //                        locationData.accuracy
 //                    )
+                    // --- INPUT CSV ---
+                    //saveFilteredCsv(filteredLoc)
+
+                    // Simpan last location
+                    lastLocation = filteredLoc
 
                 } else if (error != null) {
                     _locationState.update { it.copy(error = error.message, gpsStrength = 0) }
@@ -290,14 +349,85 @@ class PersonelViewModel(
             gpsTimestamp = location.timestamp,
             heartrate    = hr.bpm,
             heartrateTs  = if (hr.timestamp > 0) hr.timestamp else System.currentTimeMillis(),
-            batteryLevel = bat.percent
+            batteryLevel = bat.percent,
+            appVersion   = BuildConfig.APP_VERSION,
+            rtmpUrl      = StreamUtils.getRtmpUrl(serialNumber)
         )
+        // --- INPUT CSV ---
+        //savePublishCsv(location)
         //Log.d("MQTT_TIMER", "SEND PAYLOAD = $payload")
         Log.d("GPS_TEST", "time=${location.timestamp}, lat=${location.lat}, lon=${location.lon}")
         mqttManager.publishData(payload)
+        RadioDataPayload::class.java.declaredFields.forEach {
+            Log.d("FIELDS", it.name)
+        }
     }
 
-    fun publishSos() {
+    private fun processLocation(newLoc: LocationData): LocationData? {
+
+        // 1. FILTER ACCURACY
+        if (newLoc.accuracy > 20f) return null
+        val last = lastAccepted
+        if (last == null) {
+            lastAccepted = newLoc
+            return newLoc
+        }
+
+        val dt = ((newLoc.timestamp - last.timestamp)/ 1000f).coerceAtLeast(0.5f)
+        val dist = distance(last, newLoc)
+        val moving = isMoving(newLoc, last)
+        if (moving) {
+            smoothWindow.clear()
+        }
+
+        // --- OUTLIER FILTER ---
+        val maxJump = 8f + 2f * dt
+        if (dist > maxJump) {
+            Log.d("FILTER", "OUTLIER: $dist")
+            return null
+        }
+
+        // 2. DYNAMIC DISTANCE FILTER
+        val smallMove = 6f + dt
+        if (!moving && dist < smallMove) {
+            val tau = 6f
+            val alpha = dt / (tau + dt)
+            val blendedLat = last.lat + alpha * (newLoc.lat - last.lat)
+            val blendedLon = last.lon + alpha * (newLoc.lon - last.lon)
+
+            val blended = newLoc.copy(lat = blendedLat, lon = blendedLon)
+            val finalLoc = smooth(blended, dt)
+
+            lastAccepted = finalLoc
+            return finalLoc
+        }
+
+        // 3. BLENDING + SMOOTHING
+        val alpha = if (moving) {
+            when {
+                newLoc.accuracy < 5 -> 0.7f
+                newLoc.accuracy < 10 -> 0.5f
+                else -> 0.3f
+            }
+        } else {
+            dt / (5f + dt)
+        }
+        val blendedLat = last.lat + alpha * (newLoc.lat - last.lat)
+        val blendedLon = last.lon + alpha * (newLoc.lon - last.lon)
+        val blended = newLoc.copy(
+            lat = blendedLat,
+            lon = blendedLon
+        )
+        val finalLoc = if (!moving) {
+            smooth(blended, dt)
+        } else {
+            blended
+        }
+        lastAccepted = finalLoc
+        return finalLoc
+    }
+
+    fun publishSos(sosValue: Int) {
         val loc = _locationState.value.data ?: return
 
         val serialNumber = Settings.Secure.getString(
@@ -309,7 +439,8 @@ class PersonelViewModel(
             session      = sessionManager,
             serialNumber = serialNumber,
             lat          = loc.lat,
-            lon          = loc.lon
+            lon          = loc.lon,
+            sos          = sosValue
         )
         mqttManager.publishSos(payload)
     }
@@ -376,6 +507,55 @@ class PersonelViewModel(
             lat, lon, ZONE_CENTER_LAT, ZONE_CENTER_LON, results
         )
         return results[0] <= ZONE_RADIUS_METERS
+    }
+
+    // HELPER HITUNG JARAK
+    private fun distance(a: LocationData, b: LocationData): Float {
+        val results = FloatArray(1)
+        android.location.Location.distanceBetween(
+            a.lat, a.lon,
+            b.lat, b.lon,
+            results
+        )
+        return results[0]
+    }
+
+    // HELPER DETEKSI GERAK
+    private fun isMoving(newLoc: LocationData, last: LocationData?): Boolean {
+        if (last == null) return true
+
+        val dist = distance(last, newLoc)
+
+        // pastikan timestamp tidak mundur
+        val dtMillis = newLoc.timestamp - last.timestamp
+        if (dtMillis <= 0) return false
+        val timeSec = dtMillis / 1000f
+
+        // hindari kasus delay terlalu lama
+        if (timeSec > 10f) {
+            return dist > 5f
+        }
+        val speed = dist / timeSec
+
+        // kombinasi speed + jarak minimum
+        return speed > 1.5f || dist > 8f
+    }
+
+    // HELPER SMOOTHING
+    private fun smooth(loc: LocationData, dt: Float): LocationData {
+        val maxWindow = (5f / dt).toInt().coerceIn(5, 15)
+        smoothWindow.addLast(loc)
+        if (smoothWindow.size > maxWindow) {
+            smoothWindow.removeFirst()
+        }
+
+        val avgLat = smoothWindow.map { it.lat }.average()
+        val avgLon = smoothWindow.map { it.lon }.average()
+
+        return loc.copy(
+            lat = avgLat,
+            lon = avgLon
+        )
     }
 
     // ─── FACTORY ─────────────────────────────────────────────────────────────

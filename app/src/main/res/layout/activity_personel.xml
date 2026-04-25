@@ -166,6 +166,16 @@
                             android:scaleType="centerInside"
                             android:src="@drawable/ic_layers"
                             app:tint="@color/white" />
+<!--                        <ImageButton-->
+<!--                            android:id="@+id/btnMapType"-->
+<!--                            android:layout_width="26dp"-->
+<!--                            android:layout_height="26dp"-->
+<!--                            android:src="@drawable/ic_layers"-->
+<!--                            android:background="@drawable/bg_card_selected"-->
+<!--                            android:contentDescription="Map Type"-->
+<!--                            android:scaleType="centerInside"-->
+<!--                            android:padding="4dp"-->
+<!--                            app:tint="@color/white"/>-->
 
                     </LinearLayout>
 

@@ -1,6 +1,7 @@
 package com.example.personeltracking2026.ui.personel
 
 import android.Manifest
+import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.Intent
 import android.content.SharedPreferences
@@ -8,6 +9,7 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.KeyEvent
 import android.widget.TextView
 import android.widget.Toast
@@ -30,6 +32,7 @@ import com.example.personeltracking2026.core.mqtt.MqttPayloadBuilder
 import com.example.personeltracking2026.core.mqtt.MqttReconnectManager
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.core.sos.SosManager
+import com.example.personeltracking2026.data.model.LocationData
 import com.example.personeltracking2026.data.model.PersonelData
 import com.example.personeltracking2026.data.repository.LocationRepository
 import com.example.personeltracking2026.data.repository.PersonelRepository
@@ -38,13 +41,16 @@ import com.example.personeltracking2026.ui.bluetooth.BluetoothLeService
 import com.example.personeltracking2026.utils.drawableToBitmap
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import okhttp3.Dispatcher
 import me.relex.circleindicator.CircleIndicator3
 import org.json.JSONObject
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
@@ -52,6 +58,8 @@ import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
 import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Point
 
 
 class PersonelActivity : BaseActivity() {
@@ -61,6 +69,7 @@ class PersonelActivity : BaseActivity() {
     private lateinit var sessionManager: SessionManager
     private lateinit var mapView: MapView
     private lateinit var pagerAdapter: TopPagerAdapter
+    private lateinit var reconnectManager: MqttReconnectManager
 
     private val viewModel: PersonelViewModel by viewModels {
         PersonelViewModel.Factory(
@@ -78,6 +87,11 @@ class PersonelActivity : BaseActivity() {
     private var currentLat = zoneCenterLat
     private var currentLon = zoneCenterLon
     private var mapLibreMap: org.maplibre.android.maps.MapLibreMap? = null
+    private var isLocationStarted = false
+    private var firstLocationReceived = false
+    private var geoJsonSource: GeoJsonSource? = null
+    private var lastAccepted: LocationData? = null
+    private val smoothWindow = ArrayDeque<LocationData>()
 
     // ─── SOS ─────────────────────────────────────────────────────────────────
     private var markerBlinkJob: Job? = null
@@ -147,6 +161,8 @@ class PersonelActivity : BaseActivity() {
 
         binding.btnOverflow.setOnClickListener { showOverflowMenu(it) }
 
+        reconnectManager = MqttReconnectManager(this, viewModel.mqttManager)
+
         val savedType = getSharedPreferences("map_settings", MODE_PRIVATE)
             .getString("map_type", MapTypeManager.MapType.STANDARD.name)
 
@@ -162,7 +178,7 @@ class PersonelActivity : BaseActivity() {
                 contentResolver,
                 android.provider.Settings.Secure.ANDROID_ID
             ) ?: "unknown",
-            locationProvider = { Pair(currentLat, currentLon) }
+            locationProvider = { Pair(app.currentLat, app.currentLon) }
         )
 
         binding.btnZoomIn.setOnClickListener {
@@ -192,12 +208,31 @@ class PersonelActivity : BaseActivity() {
         viewModel.registerBatteryReceiver(this)
         binding.mapView.onStart()
         updateMqttUI()
-        startLocationUpdates()
+
+        val granted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!granted) {
+            requestLocationPermission()
+            return
+        }
+        lifecycleScope.launch(Dispatchers.IO) {
+            reconnectManager.start()
+        }
+        lifecycleScope.launch {
+            viewModel.registerBatteryReceiver(this@PersonelActivity)
+        }
+        lifecycleScope.launch {
+            startLocationUpdates()
+        }
     }
 
     // FIX ANR: unregister battery receiver di onStop
     override fun onStop() {
         super.onStop()
+
+        reconnectManager.stop()
 
         viewModel.unregisterBatteryReceiver(this)
         binding.mapView.onStop()
@@ -277,6 +312,13 @@ class PersonelActivity : BaseActivity() {
                         if (pagerAdapter.gpsSignal != signalText) {
                             pagerAdapter.gpsSignal = signalText
                             pagerAdapter.notifyItemChanged(1, "GPS")
+                        }
+
+                        state.data?.let {
+                            if (!firstLocationReceived) {
+                                firstLocationReceived = true
+                                viewModel.startPublishing()
+                            }
                         }
 
                         state.data?.let {
@@ -379,9 +421,7 @@ class PersonelActivity : BaseActivity() {
         markerBlinkJob = lifecycleScope.launch {
             var toggle = false
             while (SosManager.isActive.value) {
-                val color = if (toggle) Color.parseColor("#FF1744")
-                else Color.parseColor("#FF8A80")
-                updateMarkerWithColor(color)
+                updateMarkerWithColor(toggle)
                 toggle = !toggle
                 delay(500)
             }
@@ -391,7 +431,7 @@ class PersonelActivity : BaseActivity() {
     private fun stopMarkerBlink() {
         markerBlinkJob?.cancel()
         markerBlinkJob = null
-        updateMarkerWithColor(Color.rgb(255, 82, 82))
+        updateMarkerWithColor(true) // balik ke merah
     }
 
     // ─── PERSONEL ────────────────────────────────────────────────────────────
@@ -440,8 +480,6 @@ class PersonelActivity : BaseActivity() {
     // ─── MAP ─────────────────────────────────────────────────────────────────
 
     private fun setupMap() {
-        MapLibre.getInstance(this)
-
         mapView = binding.mapView
         mapView.onCreate(null)
 
@@ -459,103 +497,64 @@ class PersonelActivity : BaseActivity() {
                     .zoom(15.0)
                     .build()
 
-                updateMarker(currentLat, currentLon)
-            }
-        }
-    }
+                val style = it
 
-    private fun updateMarker(lat: Double, lon: Double) {
-        val map = mapLibreMap ?: return
-        val point = org.maplibre.android.geometry.LatLng(lat, lon)
-        val geoJsonSource = org.maplibre.android.style.sources.GeoJsonSource(
-            "personel-source",
-            org.maplibre.geojson.Point.fromLngLat(lon, lat)
-        )
+                // INIT SOURCE SEKALI
+                geoJsonSource = GeoJsonSource(
+                    "personel-source",
+                    Point.fromLngLat(currentLon, currentLat)
+                )
+                style.addSource(geoJsonSource!!)
 
-        map.style?.apply {
+                // ICON DEFAULT (MERAH)
+                val drawableRed = ContextCompat.getDrawable(this, R.drawable.ic_location_pin)!!
+                drawableRed.setTint(Color.parseColor("#FF1744"))
+                val bitmapRed = drawableToBitmap(drawableRed)
 
-            getLayer("personel-layer")?.let { removeLayer(it) }
-            getSource("personel-source")?.let { removeSource(it) }
+                style.addImage("marker-red", bitmapRed)
 
-            addSource(geoJsonSource)
-            // AMBIL drawable
-            val drawable = ContextCompat.getDrawable(this@PersonelActivity, R.drawable.ic_location_pin)
-                ?: return  // kalau null, stop biar gak crash
+                // ICON PINK (UNTUK BLINK)
+                val drawablePink = ContextCompat.getDrawable(this, R.drawable.ic_location_pin)!!
+                drawablePink.setTint(Color.parseColor("#FF8A80"))
+                val bitmapPink = drawableToBitmap(drawablePink)
 
-            drawable.setTint(Color.rgb(255, 82, 82))
+                style.addImage("marker-pink", bitmapPink)
 
-            val bitmap = drawableToBitmap(drawable)
-
-            // addImage HARUS sebelum layer
-            addImage("marker-icon", bitmap)
-
-            val symbolLayer = SymbolLayer(
-                "personel-layer",
-                "personel-source"
-            ).withProperties(
-                iconImage("marker-icon"),
-                iconAllowOverlap(true),
-                iconIgnorePlacement(true)
-            )
-
-            addLayer(symbolLayer)
-        }
-
-        map.animateCamera(
-            org.maplibre.android.camera.CameraUpdateFactory.newLatLng(point)
-        )
-    }
-
-    private fun updateMarkerWithColor(tintColor: Int) {
-        val map = mapLibreMap ?: return
-
-        val geoJsonSource = org.maplibre.android.style.sources.GeoJsonSource(
-            "personel-source",
-            org.maplibre.geojson.Point.fromLngLat(currentLon, currentLat)
-        )
-
-        map.style?.apply {
-            getLayer("personel-layer")?.let { removeLayer(it) }
-            getSource("personel-source")?.let { removeSource(it) }
-
-            addSource(geoJsonSource)
-
-            val drawable = ContextCompat.getDrawable(
-                this@PersonelActivity, R.drawable.ic_location_pin
-            ) ?: return
-
-            drawable.setTint(tintColor)
-            addImage("marker-icon", drawableToBitmap(drawable))
-
-            addLayer(
-                SymbolLayer("personel-layer", "personel-source")
+                // INIT LAYER SEKALI
+                val symbolLayer = SymbolLayer("personel-layer", "personel-source")
                     .withProperties(
-                        iconImage("marker-icon"),
+                        iconImage("marker-red"),
                         iconAllowOverlap(true),
                         iconIgnorePlacement(true)
                     )
+                style.addLayer(symbolLayer)
+            }
+        }
+        Log.d("INIT", "MAP READY")
+    }
+
+    private fun updateMarker(lat: Double, lon: Double) {
+        geoJsonSource?.setGeoJson(
+            Point.fromLngLat(lon, lat)
+        )
+
+        val newLoc = LocationData(lat, lon, 0f, "")
+        val last = lastAccepted
+
+        if (last == null || distance(last, newLoc) > 5) {
+            mapLibreMap?.moveCamera(
+                CameraUpdateFactory.newLatLng(LatLng(lat, lon))
             )
+            lastAccepted = newLoc
         }
     }
 
-    private fun showMapTypeMenu() {
-        val wrapper = android.view.ContextThemeWrapper(this, R.style.DarkPopupMenu)
-        val popup   = android.widget.PopupMenu(wrapper, binding.btnMapType)
-        MapTypeManager.MapType.values().forEach { popup.menu.add(it.label) }
-        popup.setOnMenuItemClickListener { item ->
-            MapTypeManager.MapType.values()
-                .firstOrNull { it.label == item.title.toString() }
-                ?.let {
-                    currentMapType = it
-                    applyMapType(it)
+    private fun updateMarkerWithColor(useRed: Boolean) {
+        val layer = mapLibreMap?.style?.getLayer("personel-layer") as? SymbolLayer
 
-                    getSharedPreferences("map_settings", MODE_PRIVATE).edit {
-                        putString("map_type", it.name)
-                    }
-                }
-            true
-        }
-        popup.show()
+        layer?.setProperties(
+            iconImage(if (useRed) "marker-red" else "marker-pink")
+        )
     }
 
     private fun updateCoordinates(lat: Double, lon: Double) {
@@ -569,19 +568,40 @@ class PersonelActivity : BaseActivity() {
     private fun applyMapType(type: MapTypeManager.MapType) {
         val map = mapLibreMap ?: return
 
-        // IMPAN posisi kamera sekarang
         val currentCamera = map.cameraPosition
-
         val styleUrl = MapTypeManager.getStyleUrl(type)
 
         map.setStyle(
             Style.Builder().fromUri(styleUrl)
-        ) {
-            // RESTORE kamera
+        ) { style ->
+
             map.cameraPosition = currentCamera
 
-            // Tambahin marker lagi
-            updateMarker(currentLat, currentLon)
+            // SOURCE
+            geoJsonSource = GeoJsonSource(
+                "personel-source",
+                Point.fromLngLat(currentLon, currentLat)
+            )
+            style.addSource(geoJsonSource!!)
+
+            // ICON (WAJIB)
+            val drawableRed = ContextCompat.getDrawable(this, R.drawable.ic_location_pin)!!
+            drawableRed.setTint(Color.parseColor("#FF1744"))
+            style.addImage("marker-red", drawableToBitmap(drawableRed))
+
+            val drawablePink = ContextCompat.getDrawable(this, R.drawable.ic_location_pin)!!
+            drawablePink.setTint(Color.parseColor("#FF8A80"))
+            style.addImage("marker-pink", drawableToBitmap(drawablePink))
+
+            // LAYER
+            val symbolLayer = SymbolLayer("personel-layer", "personel-source")
+                .withProperties(
+                    iconImage("marker-red"),
+                    iconAllowOverlap(true),
+                    iconIgnorePlacement(true)
+                )
+
+            style.addLayer(symbolLayer)
         }
     }
 
@@ -592,15 +612,23 @@ class PersonelActivity : BaseActivity() {
             this, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
-        if (granted)
-            //startLocationUpdates()
-        else locationPermissionRequest.launch(
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-        )
+        if (!granted) {
+            locationPermissionRequest.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
     }
 
     private fun startLocationUpdates() {
+        if (isLocationStarted) return
+
+        isLocationStarted = true
+
         viewModel.startLocationUpdates(2000)
+        Log.d("INIT", "START GPS")
     }
 
     private fun parseIntervalToMs(interval: String): Long {
@@ -615,6 +643,16 @@ class PersonelActivity : BaseActivity() {
             }
             else -> 5000L
         }
+    }
+
+    private fun distance(a: LocationData, b: LocationData): Float {
+        val results = FloatArray(1)
+        android.location.Location.distanceBetween(
+            a.lat, a.lon,
+            b.lat, b.lon,
+            results
+        )
+        return results[0]
     }
 
     // ─── VITAL SIGNS UI ──────────────────────────────────────────────────────
@@ -651,12 +689,6 @@ class PersonelActivity : BaseActivity() {
             intent.putExtra("mapType", currentMapType.name)
 
             startActivity(intent)
-        }
-//        binding.btnUbahInterval.setOnClickListener {
-//            startActivity(Intent(this, SettingsActivity::class.java))
-//        }
-        binding.btnMapType.setOnClickListener {
-            showMapTypeMenu()
         }
     }
 }

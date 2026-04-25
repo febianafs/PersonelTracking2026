@@ -66,12 +66,6 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
         val RESOLUTION_HD = Pair(1280, 720)
     }
 
-    // Gabung RTMP Url + Device serial number
-    fun getRtmpUrl(serial: String): String {
-        return "rtmp://76.13.20.253:11935/personel/$serial"
-    }
-
-
     // ─────────────────────────────────────────────
     //  ConnectChecker callbacks
     // ─────────────────────────────────────────────
@@ -150,7 +144,7 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
             mqtt             = app.mqttManager,
             session          = sessionManager,
             serial           = DeviceIdProvider.getDeviceId(this),
-            locationProvider = { Pair(0.0, 0.0) }
+            locationProvider = { Pair(app.currentLat, app.currentLon) }
         )
 
         WindowCompat.setDecorFitsSystemWindows(window, true)
@@ -303,7 +297,7 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
 
     private fun startRtmpStream() {
         val serial = DeviceIdProvider.getDeviceId(this)
-        val url = getRtmpUrl(serial)
+        val url = StreamUtils.getRtmpUrl(serial)
         if (!hasAudioPermission()) {
             Toast.makeText(this, "Izin mikrofon diperlukan", Toast.LENGTH_SHORT).show()
             viewModel.stopStream()

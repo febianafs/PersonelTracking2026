@@ -22,10 +22,15 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.example.personeltracking2026.App
 import com.example.personeltracking2026.R
+import com.example.personeltracking2026.core.base.BaseActivity
+import com.example.personeltracking2026.core.session.SessionManager
+import com.example.personeltracking2026.core.sos.SosManager
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-class BluetoothActivity : AppCompatActivity() {
+class BluetoothActivity : BaseActivity() {
 
     // ── Views ─────────────────────────────────────────────────────────────
     private lateinit var switchBluetooth: SwitchCompat
@@ -76,6 +81,17 @@ class BluetoothActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_bluetooth)
+
+        val app = application as App
+        SosManager.init(
+            mqtt = app.mqttManager,
+            session = SessionManager(this),
+            serial = android.provider.Settings.Secure.getString(
+                contentResolver,
+                android.provider.Settings.Secure.ANDROID_ID
+            ) ?: "unknown",
+            locationProvider = { Pair(app.currentLat, app.currentLon) } // atau bisa diganti kalau ada location
+        )
 
         initViews()
         setupAdapter()
