@@ -28,20 +28,6 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
 
-                    <androidx.constraintlayout.widget.Guideline
-                        android:id="@+id/guideline1"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        app:layout_constraintGuide_percent="0.3" />
-
-                    <androidx.constraintlayout.widget.Guideline
-                        android:id="@+id/guideline2"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        app:layout_constraintGuide_percent="0.5" />
-
                     <TextView
                         android:id="@+id/mqttTitle"
                         android:layout_width="match_parent"
@@ -85,8 +71,8 @@
                         android:textSize="10sp"
                         android:layout_marginTop="5sp"
 
-                        app:layout_constraintTop_toBottomOf="@+id/mqttTitle"
-                        app:layout_constraintStart_toEndOf="@id/guideline1"/>
+                        app:layout_constraintTop_toBottomOf="@+id/tvHostIp"
+                        app:layout_constraintStart_toStartOf="parent"/>
 
                     <TextView
                         android:id="@+id/tvPort"
@@ -97,7 +83,7 @@
                         android:textSize="11sp"
 
                         app:layout_constraintTop_toBottomOf="@+id/portTitle"
-                        app:layout_constraintStart_toEndOf="@id/guideline1" />
+                        app:layout_constraintStart_toStartOf="parent"/>
 
                     <TextView
                         android:id="@+id/sendInterval"
@@ -108,8 +94,8 @@
                         android:textSize="10sp"
                         android:layout_marginTop="5sp"
 
-                        app:layout_constraintTop_toBottomOf="@+id/mqttTitle"
-                        app:layout_constraintStart_toEndOf="@+id/guideline2"/>
+                        app:layout_constraintTop_toBottomOf="@+id/tvPort"
+                        app:layout_constraintStart_toStartOf="parent"/>
 
                     <TextView
                         android:id="@+id/tvInterval"
@@ -120,7 +106,13 @@
                         android:textSize="11sp"
 
                         app:layout_constraintTop_toBottomOf="@+id/sendInterval"
-                        app:layout_constraintStart_toEndOf="@id/guideline2"/>
+                        app:layout_constraintStart_toStartOf="parent"/>
+
+                    <!-- SPACER -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"/>
 
                     <TextView
                         android:id="@+id/mqttSettingBtn"
@@ -133,8 +125,7 @@
                         android:focusable="true"
 
                         app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintTop_toBottomOf="@+id/tvInterval" />
+                        app:layout_constraintEnd_toEndOf="parent" />
 
                 </androidx.constraintlayout.widget.ConstraintLayout>
 

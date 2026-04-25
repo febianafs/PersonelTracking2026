@@ -127,6 +127,7 @@ class PersonelViewModel(
         onPublishSuccess = {
             val now = System.currentTimeMillis()
             Log.d("MQTT_TIMER", "SUCCESS publish at $now")
+            _lastSyncTime.value = now
         }
     }
 

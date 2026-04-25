@@ -41,6 +41,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import me.relex.circleindicator.CircleIndicator3
 import org.json.JSONObject
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -131,6 +132,8 @@ class PersonelActivity : BaseActivity() {
 
         pagerAdapter = TopPagerAdapter()
         binding.viewPagerTop.adapter = pagerAdapter
+
+        binding.indicator?.setViewPager(binding.viewPagerTop)
 
         (binding.viewPagerTop.getChildAt(0) as RecyclerView)
             .itemAnimator = null
@@ -316,29 +319,25 @@ class PersonelActivity : BaseActivity() {
 
                 // Last sync
                 launch {
-                    var lastSyncTime = 0L
-
-                    // ambil update dari MQTT
-                    launch {
-                        viewModel.lastSyncTime.collect {
-                            lastSyncTime = it
-                        }
-                    }
-
-                    // timer UI tiap detik
                     while (true) {
+                        val lastSyncTime = viewModel.lastSyncTime.value  // ← baca value terkini langsung
+
                         val diffSec = (System.currentTimeMillis() - lastSyncTime) / 1000
 
                         val (text, color) = when {
-                            diffSec < 2 -> "Just now" to "#69F0AE"
-                            diffSec < 60 -> "${diffSec}s ago" to "#69F0AE"
-                            diffSec < 300 -> "${diffSec / 60}m ago" to "#FFD740"
-                            else -> "${diffSec / 60}m ago" to "#FF5252"
+                            lastSyncTime == 0L -> "Belum sync"       to "#9E9E9E"  // state awal sebelum ada sync
+                            diffSec < 2        -> "Just now"          to "#69F0AE"
+                            diffSec < 60       -> "${diffSec}s ago"   to "#69F0AE"
+                            diffSec < 300      -> "${diffSec / 60}m ago" to "#FFD740"
+                            else               -> "${diffSec / 60}m ago" to "#FF5252"
                         }
 
-                        pagerAdapter.lastSync = text
+                        pagerAdapter.lastSync    = text
                         pagerAdapter.statusColor = color
-                        pagerAdapter.notifyDataSetChanged()
+                        pagerAdapter.notifyItemChanged(0)  // Profile page
+                        pagerAdapter.notifyItemChanged(1)  // Vital page
+                        pagerAdapter.notifyItemChanged(2)  // MQTT page
+
                         delay(1000)
                     }
                 }
@@ -431,7 +430,7 @@ class PersonelActivity : BaseActivity() {
         view.findViewById<TextView>(R.id.tvRank).text = personel?.rank?.name ?: "-"
         view.findViewById<TextView>(R.id.tvUnit).text = personel?.unit?.name ?: "-"
         view.findViewById<TextView>(R.id.tvSquad).text = personel?.regu?.name ?: "-"
-        view.findViewById<TextView>(R.id.tvPersonelStatus).text = "Active"
+//        view.findViewById<TextView>(R.id.tvPersonelStatus).text = "Active"
 
         dialog.setContentView(view)
         dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED

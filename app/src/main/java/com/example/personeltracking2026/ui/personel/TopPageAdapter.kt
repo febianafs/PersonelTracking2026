@@ -53,7 +53,14 @@ class TopPagerAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 ProfileVH(inflater.inflate(layoutRes, parent, false))
             }
             TYPE_VITAL -> VitalVH(inflater.inflate(R.layout.vital_items, parent, false))
-            TYPE_MQTT  -> MqttVH(inflater.inflate(R.layout.mqtt_items, parent, false))
+            TYPE_MQTT -> {
+                val layoutRes = if (isLandscape)
+                    R.layout.mqtt_items_land
+                else
+                    R.layout.mqtt_items
+
+                MqttVH(inflater.inflate(layoutRes, parent, false))
+            }
             else -> throw IllegalArgumentException()
         }
     }
@@ -74,8 +81,8 @@ class TopPagerAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         private val tvName     = itemView.findViewById<TextView?>(R.id.tvName)
         private val tvNRP      = itemView.findViewById<TextView?>(R.id.tvNRP)
         private val tvRank     = itemView.findViewById<TextView>(R.id.tvRank)
-        private val tvLat      = itemView.findViewById<TextView>(R.id.tvLat)
-        private val tvLon      = itemView.findViewById<TextView>(R.id.tvLon)
+//        private val tvLat      = itemView.findViewById<TextView>(R.id.tvLat)
+//        private val tvLon      = itemView.findViewById<TextView>(R.id.tvLon)
         private val tvBattery  = itemView.findViewById<TextView?>(R.id.tvBattery)
         private val tvLastSync = itemView.findViewById<TextView?>(R.id.tvLastSync)
         private val dot        = itemView.findViewById<View>(R.id.dotLastSync)
@@ -90,8 +97,8 @@ class TopPagerAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             tvName?.text     = name
             tvNRP?.text      = nrp
             tvRank?.text     = rank
-            tvLat?.text      = "Lat : $latitude"
-            tvLon?.text      = "Lon : $longitude"
+//            tvLat?.text      = "Lat : $latitude"
+//            tvLon?.text      = "Lon : $longitude"
             tvBattery?.text  = "$battery%"
             tvLastSync?.text = lastSync
 

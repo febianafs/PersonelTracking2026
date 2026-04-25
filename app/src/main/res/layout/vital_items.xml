@@ -90,7 +90,7 @@
                         android:layout_height="wrap_content"
                         android:text="BLE settings ›"
                         android:textColor="#4FC3F7"
-                        android:textSize="11sp"
+                        android:textSize="13sp"
 
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintBottom_toBottomOf="parent"
