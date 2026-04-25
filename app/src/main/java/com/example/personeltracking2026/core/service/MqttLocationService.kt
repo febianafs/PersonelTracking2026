@@ -20,12 +20,14 @@ import android.content.IntentFilter
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.personeltracking2026.App
+import com.example.personeltracking2026.BuildConfig
 import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.location.AppLocationManager
 import com.example.personeltracking2026.core.mqtt.MqttPayloadBuilder
 import com.example.personeltracking2026.core.mqtt.MqttReconnectManager
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.core.utils.Constants
+import com.example.personeltracking2026.utils.DeviceIdProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -238,10 +240,9 @@ class MqttLocationService : Service() {
             val nowMs = System.currentTimeMillis()
 
             // Baca HR dari App-level state (diisi oleh PersonelViewModel via BLE)
-            val app = application as? com.example.personeltracking2026.App
-            val hr    = app?.currentHeartRate   ?: 0
-            val hrTs  = app?.currentHeartRateTs?.takeIf { it > 0 } ?: nowMs
-
+            val app          = application as? com.example.personeltracking2026.App
+            val hr           = app?.currentHeartRate   ?: 0
+            val hrTs         = app?.currentHeartRateTs?.takeIf { it > 0 } ?: nowMs
             val payload = MqttPayloadBuilder.buildDataPayload(
                 session      = sessionManager,
                 serialNumber = serialNumber,
@@ -250,7 +251,9 @@ class MqttLocationService : Service() {
                 gpsTimestamp = nowMs,
                 heartrate    = hr,
                 heartrateTs  = hrTs,
-                batteryLevel = getBatteryLevel()
+                batteryLevel = getBatteryLevel(),
+                appVersion   = BuildConfig.APP_VERSION,
+                rtmpUrl      = StreamUtils.getRtmpUrl(serialNumber)
             )
 
             mqttManager.publishData(payload)

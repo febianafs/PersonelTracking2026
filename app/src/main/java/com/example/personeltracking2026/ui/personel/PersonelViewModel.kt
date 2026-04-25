@@ -13,6 +13,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.personeltracking2026.App
+import com.example.personeltracking2026.BuildConfig
 import com.example.personeltracking2026.core.mqtt.MqttPayloadBuilder
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.data.model.LocationData
@@ -242,7 +243,7 @@ class PersonelViewModel(
                     app.currentLon = filteredLoc.lon
 
                     // --- INPUT CSV ---
-                    saveFilteredCsv(filteredLoc)
+                    //saveFilteredCsv(filteredLoc)
 
                     // Simpan last location
                     lastLocation = filteredLoc
@@ -312,10 +313,12 @@ class PersonelViewModel(
             gpsTimestamp = location.timestamp,
             heartrate    = hr.bpm,
             heartrateTs  = if (hr.timestamp > 0) hr.timestamp else System.currentTimeMillis(),
-            batteryLevel = bat.percent
+            batteryLevel = bat.percent,
+            appVersion   = BuildConfig.APP_VERSION,
+            rtmpUrl      = StreamUtils.getRtmpUrl(serialNumber)
         )
         // --- INPUT CSV ---
-        savePublishCsv(location)
+        //savePublishCsv(location)
         //Log.d("MQTT_TIMER", "SEND PAYLOAD = $payload")
         Log.d("GPS_TEST", "time=${location.timestamp}, lat=${location.lat}, lon=${location.lon}")
         mqttManager.publishData(payload)

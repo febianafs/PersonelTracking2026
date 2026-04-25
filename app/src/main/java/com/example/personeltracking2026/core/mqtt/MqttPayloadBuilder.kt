@@ -7,6 +7,7 @@ import com.example.personeltracking2026.data.model.IdentityPayload
 import com.example.personeltracking2026.data.model.RadioDataPayload
 import com.example.personeltracking2026.data.model.RadioHealthPayload
 import com.example.personeltracking2026.data.model.RadioSosPayload
+import com.example.personeltracking2026.data.model.StreamPayload
 
 /**
  * Helper untuk build payload MQTT dari state yang ada di app.
@@ -25,6 +26,8 @@ object MqttPayloadBuilder {
      * @param heartrate       BPM dari BLE smartwatch (0 jika belum ada)
      * @param heartrateTs     Timestamp epoch saat HR diterima
      * @param batteryLevel    Level baterai 0-100
+     * @param appVersion      Versi aplikasi yang sedang berjalan
+     * @param rtmpUrl         Url livestream dari setiap device
      */
     fun buildDataPayload(
         session: SessionManager,
@@ -34,9 +37,11 @@ object MqttPayloadBuilder {
         gpsTimestamp: Long,
         heartrate: Int,
         heartrateTs: Long,
-        batteryLevel: Int
+        batteryLevel: Int,
+        appVersion: String,
+        rtmpUrl: String
     ): RadioDataPayload {
-        val nowSec = System.currentTimeMillis() / 1000
+        val nowSec = System.currentTimeMillis()
 
         val identity = IdentityPayload(
             id        = session.getUserId()?.toString() ?: "",
@@ -46,16 +51,30 @@ object MqttPayloadBuilder {
             unit      = session.getUnit() ?: "",
             battalion = session.getBattalion() ?: "",
             squad     = session.getSquad() ?: "",
-            avatar    = session.getAvatar() ?: ""
+            avatarUrl = session.getAvatar() ?: ""
         )
 
         return RadioDataPayload(
             timestamp    = nowSec,
             serialNumber = serialNumber,
+            appVersion   = appVersion,
             identity     = identity,
-            gps          = GpsPayload(lat, lon, gpsTimestamp / 1000),
-            radioHealth  = RadioHealthPayload(heartrate, heartrateTs / 1000),
-            battery      = BatteryPayload(batteryLevel)
+            gps = GpsPayload(
+                gpsTimestamp = gpsTimestamp,
+                latitude = lat,
+                longitude = lon
+            ),
+            radioHealth = RadioHealthPayload(
+                heartrateTimestamp = heartrateTs,
+                heartrate = heartrate
+            ),
+            battery = BatteryPayload(
+                batteryTimestamp = nowSec,
+                level = batteryLevel
+            ),
+            stream = StreamPayload(
+                rtmpUrl = rtmpUrl
+            )
         )
     }
 

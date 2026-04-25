@@ -7,10 +7,12 @@ import com.google.gson.annotations.SerializedName
 data class RadioDataPayload(
     @SerializedName("timestamp")      val timestamp: Long,
     @SerializedName("serial_number")  val serialNumber: String,
+    @SerializedName("app_version")    val appVersion: String,
     @SerializedName("identity")       val identity: IdentityPayload,
     @SerializedName("gps")            val gps: GpsPayload,
     @SerializedName("radio_health")   val radioHealth: RadioHealthPayload,
-    @SerializedName("battery")        val battery: BatteryPayload
+    @SerializedName("battery")        val battery: BatteryPayload,
+    @SerializedName("stream")         val stream: StreamPayload
 )
 
 data class IdentityPayload(
@@ -21,22 +23,27 @@ data class IdentityPayload(
     @SerializedName("unit")       val unit: String,
     @SerializedName("battalion")  val battalion: String,
     @SerializedName("squad")      val squad: String,
-    @SerializedName("avatar")     val avatar: String
+    @SerializedName("avatar_url") val avatarUrl: String
 )
 
 data class GpsPayload(
+    @SerializedName("gps_timestamp")  val gpsTimestamp: Long,
     @SerializedName("latitude")       val latitude: Double,
-    @SerializedName("longitude")      val longitude: Double,
-    @SerializedName("gps_timestamp")  val gpsTimestamp: Long
+    @SerializedName("longitude")      val longitude: Double
 )
 
 data class RadioHealthPayload(
-    @SerializedName("heartrate")            val heartrate: Int,
-    @SerializedName("heartrate_timestamp")  val heartrateTimestamp: Long
+    @SerializedName("heartrate_timestamp")  val heartrateTimestamp: Long,
+    @SerializedName("heartrate")            val heartrate: Int
 )
 
 data class BatteryPayload(
-    @SerializedName("level") val level: Int
+    @SerializedName("battery_timestamp") val batteryTimestamp: Long,
+    @SerializedName("level")             val level: Int
+)
+
+data class StreamPayload(
+    @SerializedName("rtmp_url") val rtmpUrl: String
 )
 
 // ─── TOPIC: radio/sos ────────────────────────────────────────────────────────
