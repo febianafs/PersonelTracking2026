@@ -59,7 +59,19 @@ class PersonelViewModel(
     private val locationRepository: LocationRepository,
     private val sessionManager    : SessionManager
 ) : AndroidViewModel(application) {
+//    private val fileName = "gps_log.csv"
 
+//    private val file: File by lazy {
+//        File(
+//            getApplication<Application>().getExternalFilesDir(null),
+//            fileName
+//        ).apply {
+//            if (!exists()) {
+//                createNewFile()
+//                writeText("timestamp,lat,lon,accuracy\n") // header
+//            }
+//        }
+//    }
     // LOG CSV START
     private val rawFile by lazy {
         File(
@@ -96,6 +108,22 @@ class PersonelViewModel(
         }
     }
 
+//    fun saveToCsv(
+//        timestamp: Long,
+//        lat: Double,
+//        lon: Double,
+//        accuracy: Float
+//    ) {
+//        viewModelScope.launch(Dispatchers.IO) {
+//            try {
+//                FileWriter(file, true).use { writer ->
+//                    writer.append("$timestamp,$lat,$lon,$accuracy\n")
+//                }
+//            } catch (e: Exception) {
+//                Log.e("CSV_LOG", "Error writing CSV", e)
+//            }
+//        }
+//    }
     fun savePublishCsv(loc: LocationData) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -150,6 +178,7 @@ class PersonelViewModel(
         onPublishSuccess = {
             val now = System.currentTimeMillis()
             Log.d("MQTT_TIMER", "SUCCESS publish at $now")
+            _lastSyncTime.value = now
         }
     }
 
@@ -242,6 +271,12 @@ class PersonelViewModel(
                     app.currentLat = filteredLoc.lat
                     app.currentLon = filteredLoc.lon
 
+//                    saveToCsv(
+//                        locationData.timestamp,
+//                        locationData.lat,
+//                        locationData.lon,
+//                        locationData.accuracy
+//                    )
                     // --- INPUT CSV ---
                     //saveFilteredCsv(filteredLoc)
 

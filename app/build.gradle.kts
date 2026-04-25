@@ -106,6 +106,9 @@ dependencies {
     //WorkManager
     implementation("androidx.work:work-runtime-ktx:2.11.2")
 
+    //circleindicator
+    implementation("me.relex:circleindicator:2.1.6")
+
     // TEST
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
