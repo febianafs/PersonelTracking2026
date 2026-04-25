@@ -58,36 +58,36 @@ class PersonelViewModel(
     private val locationRepository: LocationRepository,
     private val sessionManager    : SessionManager
 ) : AndroidViewModel(application) {
-    private val fileName = "gps_log.csv"
+//    private val fileName = "gps_log.csv"
 
-    private val file: File by lazy {
-        File(
-            getApplication<Application>().getExternalFilesDir(null),
-            fileName
-        ).apply {
-            if (!exists()) {
-                createNewFile()
-                writeText("timestamp,lat,lon,accuracy\n") // header
-            }
-        }
-    }
+//    private val file: File by lazy {
+//        File(
+//            getApplication<Application>().getExternalFilesDir(null),
+//            fileName
+//        ).apply {
+//            if (!exists()) {
+//                createNewFile()
+//                writeText("timestamp,lat,lon,accuracy\n") // header
+//            }
+//        }
+//    }
 
-    fun saveToCsv(
-        timestamp: Long,
-        lat: Double,
-        lon: Double,
-        accuracy: Float
-    ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                FileWriter(file, true).use { writer ->
-                    writer.append("$timestamp,$lat,$lon,$accuracy\n")
-                }
-            } catch (e: Exception) {
-                Log.e("CSV_LOG", "Error writing CSV", e)
-            }
-        }
-    }
+//    fun saveToCsv(
+//        timestamp: Long,
+//        lat: Double,
+//        lon: Double,
+//        accuracy: Float
+//    ) {
+//        viewModelScope.launch(Dispatchers.IO) {
+//            try {
+//                FileWriter(file, true).use { writer ->
+//                    writer.append("$timestamp,$lat,$lon,$accuracy\n")
+//                }
+//            } catch (e: Exception) {
+//                Log.e("CSV_LOG", "Error writing CSV", e)
+//            }
+//        }
+//    }
     companion object {
         private const val ZONE_CENTER_LAT    = -7.868729
         private const val ZONE_CENTER_LON    = 105.643117
@@ -218,12 +218,12 @@ class PersonelViewModel(
                         isInZone    = checkInZone(locationData.lat, locationData.lon)
                     )
 
-                    saveToCsv(
-                        locationData.timestamp,
-                        locationData.lat,
-                        locationData.lon,
-                        locationData.accuracy
-                    )
+//                    saveToCsv(
+//                        locationData.timestamp,
+//                        locationData.lat,
+//                        locationData.lon,
+//                        locationData.accuracy
+//                    )
 
                 } else if (error != null) {
                     _locationState.update { it.copy(error = error.message, gpsStrength = 0) }
