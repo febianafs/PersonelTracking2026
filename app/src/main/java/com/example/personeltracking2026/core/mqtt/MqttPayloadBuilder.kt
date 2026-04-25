@@ -41,7 +41,7 @@ object MqttPayloadBuilder {
         appVersion: String,
         rtmpUrl: String
     ): RadioDataPayload {
-        val nowSec = System.currentTimeMillis()
+        val nowSec = System.currentTimeMillis() / 1000
 
         val identity = IdentityPayload(
             id        = session.getUserId()?.toString() ?: "",

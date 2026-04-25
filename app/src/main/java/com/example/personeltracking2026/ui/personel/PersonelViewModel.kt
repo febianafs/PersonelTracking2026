@@ -18,6 +18,7 @@ import com.example.personeltracking2026.core.mqtt.MqttPayloadBuilder
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.data.model.LocationData
 import com.example.personeltracking2026.data.model.PersonelData
+import com.example.personeltracking2026.data.model.RadioDataPayload
 import com.example.personeltracking2026.data.repository.LocationRepository
 import com.example.personeltracking2026.data.repository.PersonelRepository
 import com.example.personeltracking2026.data.repository.Result
@@ -357,6 +358,9 @@ class PersonelViewModel(
         //Log.d("MQTT_TIMER", "SEND PAYLOAD = $payload")
         Log.d("GPS_TEST", "time=${location.timestamp}, lat=${location.lat}, lon=${location.lon}")
         mqttManager.publishData(payload)
+        RadioDataPayload::class.java.declaredFields.forEach {
+            Log.d("FIELDS", it.name)
+        }
     }
 
     private fun processLocation(newLoc: LocationData): LocationData? {

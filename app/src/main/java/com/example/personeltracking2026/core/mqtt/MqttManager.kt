@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.nio.charset.StandardCharsets
 
 class MqttManager(private val context: Context) {
@@ -43,7 +44,7 @@ class MqttManager(private val context: Context) {
     var onPublishSuccess : ((topic: String) -> Unit)?                   = null
     var onPublishFailed  : ((topic: String, reason: String) -> Unit)?   = null
 
-    private val gson  = Gson()
+    //private val gson  = Gson()
     private val scope = CoroutineScope(Dispatchers.IO)
 
     private var client             : Mqtt3AsyncClient? = null
@@ -103,12 +104,25 @@ class MqttManager(private val context: Context) {
     fun isConnected(): Boolean = client?.state?.isConnected == true
 
     fun publishData(payload: RadioDataPayload) {
-        scope.launch { publish(TOPIC_DATA, gson.toJson(payload), QOS_DATA) }
+        scope.launch {
+            val json = buildDataJson(payload)
+            publish(TOPIC_DATA, json, QOS_DATA)
+        }
     }
 
     fun publishSos(payload: RadioSosPayload) {
-        scope.launch { publish(TOPIC_SOS, gson.toJson(payload), QOS_SOS) }
+        scope.launch {
+            val json = buildSosJson(payload)
+            publish(TOPIC_SOS, json, QOS_SOS)
+        }
     }
+//    fun publishData(payload: RadioDataPayload) {
+//        scope.launch { publish(TOPIC_DATA, gson.toJson(payload), QOS_DATA) }
+//    }
+//
+//    fun publishSos(payload: RadioSosPayload) {
+//        scope.launch { publish(TOPIC_SOS, gson.toJson(payload), QOS_SOS) }
+//    }
 
     // ─── INTERNAL ────────────────────────────────────────────────────────────
 
@@ -219,5 +233,59 @@ class MqttManager(private val context: Context) {
             delay(delayMs)
             if (!isIntentionallyStopped) doConnect()
         }
+    }
+
+    private fun buildDataJson(p: RadioDataPayload): String {
+        return JSONObject().apply {
+
+            put("timestamp", p.timestamp?: "")
+            put("serial_number", p.serialNumber?: "")
+            put("app_version", p.appVersion?: "")
+
+            put("identity", JSONObject().apply {
+                put("id", p.identity.id?: "")
+                put("nrp", p.identity.nrp?: "")
+                put("name", p.identity.name?: "")
+                put("rank", p.identity.rank?: "")
+                put("unit", p.identity.unit?: "")
+                put("battalion", p.identity.battalion?: "")
+                put("squad", p.identity.squad?: "")
+                put("avatar_url", p.identity.avatarUrl?: "")
+            })
+
+            put("gps", JSONObject().apply {
+                put("gps_timestamp", p.gps.gpsTimestamp?: "")
+                put("latitude", p.gps.latitude?: "")
+                put("longitude", p.gps.longitude?: "")
+            })
+
+            put("radio_health", JSONObject().apply {
+                put("heartrate_timestamp", p.radioHealth.heartrateTimestamp?: "")
+                put("heartrate", p.radioHealth.heartrate?: "")
+            })
+
+            put("battery", JSONObject().apply {
+                put("battery_timestamp", p.battery.batteryTimestamp?: "")
+                put("level", p.battery.level?: "")
+            })
+
+            put("stream", JSONObject().apply {
+                put("rtmp_url", p.stream.rtmpUrl?: "")
+            })
+
+        }.toString()
+    }
+
+    private fun buildSosJson(p: RadioSosPayload): String {
+        return JSONObject().apply {
+            put("timestamp", p.timestamp?: "")
+            put("serial_number", p.serialNumber?: "")
+            put("id", p.id?: "")
+            put("name", p.name?: "")
+            put("avatar", p.avatarUrl?: "")
+            put("sos", p.sos?: "")
+            put("latitude", p.latitude?: "")
+            put("longitude", p.longitude?: "")
+        }.toString()
     }
 }
