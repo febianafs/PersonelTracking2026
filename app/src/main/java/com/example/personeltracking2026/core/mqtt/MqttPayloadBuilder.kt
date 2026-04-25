@@ -99,7 +99,7 @@ object MqttPayloadBuilder {
             serialNumber = serialNumber,
             id           = session.getUserId()?.toString() ?: "",
             name         = session.getName() ?: "",
-            avatar       = session.getAvatar() ?: "",
+            avatarUrl    = session.getAvatar() ?: "",
             sos          = sos,
             latitude     = lat,
             longitude    = lon
