@@ -166,7 +166,11 @@ class PersonelActivity : BaseActivity() {
         val savedType = getSharedPreferences("map_settings", MODE_PRIVATE)
             .getString("map_type", MapTypeManager.MapType.STANDARD.name)
 
-        currentMapType = MapTypeManager.MapType.valueOf(savedType!!)
+        val newType = MapTypeManager.MapType.values()
+            .firstOrNull { it.name == savedType }
+            ?: MapTypeManager.MapType.STANDARD
+
+        currentMapType = newType
 
         setupMap()
 
@@ -221,9 +225,6 @@ class PersonelActivity : BaseActivity() {
             reconnectManager.start()
         }
         lifecycleScope.launch {
-            viewModel.registerBatteryReceiver(this@PersonelActivity)
-        }
-        lifecycleScope.launch {
             startLocationUpdates()
         }
     }
@@ -244,7 +245,9 @@ class PersonelActivity : BaseActivity() {
         val savedType = getSharedPreferences("map_settings", MODE_PRIVATE)
             .getString("map_type", MapTypeManager.MapType.STANDARD.name)
 
-        val newType = MapTypeManager.MapType.valueOf(savedType!!)
+        val newType = MapTypeManager.MapType.values()
+            .firstOrNull { it.name == savedType }
+            ?: MapTypeManager.MapType.STANDARD
 
         if (newType != currentMapType) {
             currentMapType = newType
