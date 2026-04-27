@@ -31,8 +31,8 @@ class MqttManager(private val context: Context) {
 
     companion object {
         private const val TAG            = "MqttManager"
-        const val TOPIC_DATA             = "radio/data"
-        const val TOPIC_SOS              = "radio/sos"
+        const val TOPIC_DATA             = "kdu/radio/data"
+        const val TOPIC_SOS              = "kdu/radio/sos"
         const val QOS_DATA               = 1
         const val QOS_SOS                = 2
         private const val MAX_RETRY      = 5
