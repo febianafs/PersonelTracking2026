@@ -18,11 +18,14 @@ import com.example.personeltracking2026.core.mqtt.MqttConfigManager
 import com.example.personeltracking2026.core.mqtt.MqttManager
 import com.example.personeltracking2026.core.utils.Constants
 import com.example.personeltracking2026.databinding.ActivitySettingsBinding
+import com.example.personeltracking2026.utils.DeviceIdentityManager
 
 class SettingsActivity : BaseActivity() {
 
     private lateinit var binding: ActivitySettingsBinding
     private var testMqttManager: MqttManager? = null
+
+    private lateinit var deviceManager: DeviceIdentityManager
 
     private val intervalOptions = listOf(
         "1 second", "2 seconds", "5 seconds", "10 seconds",
@@ -34,6 +37,8 @@ class SettingsActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        deviceManager = DeviceIdentityManager(this)
 
         setupWindow()
         setupToolbar()
@@ -154,23 +159,73 @@ class SettingsActivity : BaseActivity() {
             Constants.DEFAULT_INTERVAL_TEXT
         ) ?: Constants.DEFAULT_INTERVAL_TEXT
         binding.actInterval.setText(savedInterval, false)
+
+        val serial = deviceManager.getValidSerial()
+        binding.etSerialNumber?.setText(serial ?: "")
+
+        binding.etSerialNumber?.isEnabled = true
     }
 
     // ─── BUTTONS ─────────────────────────────────────────────────────────────
 
     private fun setupButtons() {
-        binding.btnSaveConnection?.setOnClickListener {
+
+        // ─── SAVE SERIAL ─────────────────────────────
+        binding.btnSaveSerial!!.setOnClickListener {
+
+            val inputSerial = binding.etSerialNumber!!.text.toString().trim()
+
+            if (inputSerial.isEmpty()) {
+                binding.etSerialNumber!!.error = "Serial number wajib diisi"
+                return@setOnClickListener
+            }
+
+            val existing = deviceManager.getValidSerial()
+
+            if (inputSerial == existing) {
+                showSavedIndicator()
+                return@setOnClickListener
+            }
+
+            if (existing == null) {
+                // pertama kali simpan
+                deviceManager.saveSerialIfEmpty(inputSerial)
+                showSavedIndicator()
+            } else {
+                // sudah ada → konfirmasi overwrite
+                AlertDialog.Builder(this)
+                    .setTitle("Update Serial")
+                    .setMessage("Serial sudah ada. Mau diganti?")
+                    .setPositiveButton("Ya") { _, _ ->
+                        deviceManager.forceUpdateSerial(inputSerial)
+                        showSavedIndicator()
+                    }
+                    .setNegativeButton("Batal", null)
+                    .show()
+            }
+        }
+
+
+        // ─── SAVE MQTT CONFIG ───────────────────────
+        binding.btnSaveConnection.setOnClickListener {
+
             val config = buildConfigFromInput()
             MqttConfigManager(this).save(config)
+
             showSavedIndicator()
         }
 
-        binding.btnTestConnection?.setOnClickListener {
+
+        // ─── TEST CONNECTION ────────────────────────
+        binding.btnTestConnection.setOnClickListener {
+
             val config = buildConfigFromInput()
             updateTestButtonState(loading = true)
 
             testMqttManager?.disconnect()
+
             testMqttManager = MqttManager(this).apply {
+
                 onConnected = {
                     runOnUiThread {
                         if (!isDestroyed && !isFinishing) {
@@ -179,6 +234,7 @@ class SettingsActivity : BaseActivity() {
                         }
                     }
                 }
+
                 onDisconnected = {
                     runOnUiThread {
                         if (!isDestroyed && !isFinishing) {
@@ -188,6 +244,7 @@ class SettingsActivity : BaseActivity() {
                     }
                 }
             }
+
             testMqttManager?.connect()
         }
     }
