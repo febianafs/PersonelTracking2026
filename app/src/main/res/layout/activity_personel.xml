@@ -155,17 +155,17 @@
                         <!--                            android:textStyle="bold"-->
                         <!--                            android:layout_marginEnd="8dp"/>-->
 
-                        <!-- ICON LAYERS — ganti tipe map -->
-                        <ImageButton
-                            android:id="@+id/btnMapType"
-                            android:layout_width="26dp"
-                            android:layout_height="26dp"
-                            android:background="@drawable/bg_card_selected"
-                            android:contentDescription="Map Type"
-                            android:padding="4dp"
-                            android:scaleType="centerInside"
-                            android:src="@drawable/ic_layers"
-                            app:tint="@color/white" />
+<!--                        &lt;!&ndash; ICON LAYERS — ganti tipe map &ndash;&gt;-->
+<!--                        <ImageButton-->
+<!--                            android:id="@+id/btnMapType"-->
+<!--                            android:layout_width="26dp"-->
+<!--                            android:layout_height="26dp"-->
+<!--                            android:background="@drawable/bg_card_selected"-->
+<!--                            android:contentDescription="Map Type"-->
+<!--                            android:padding="4dp"-->
+<!--                            android:scaleType="centerInside"-->
+<!--                            android:src="@drawable/ic_layers"-->
+<!--                            app:tint="@color/white" />-->
 <!--                        <ImageButton-->
 <!--                            android:id="@+id/btnMapType"-->
 <!--                            android:layout_width="26dp"-->
@@ -176,19 +176,30 @@
 <!--                            android:scaleType="centerInside"-->
 <!--                            android:padding="4dp"-->
 <!--                            app:tint="@color/white"/>-->
+                        <Button
+                            android:id="@+id/btnFullMap"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="?attr/selectableItemBackground"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:paddingStart="8dp"
+                            android:text="Full map ›"
+                            android:textColor="@color/primary"
+                            android:textSize="10sp" />
 
                     </LinearLayout>
 
                     <FrameLayout
                         android:layout_width="match_parent"
-                        android:layout_height="130dp"
+                        android:layout_height="110dp"
                         android:layout_marginBottom="1dp">
 
                         <!-- MAP VIEW -->
                         <org.maplibre.android.maps.MapView
                             android:id="@+id/mapView"
                             android:layout_width="match_parent"
-                            android:layout_height="130dp" />
+                            android:layout_height="110dp" />
 
                         <!-- KOORDINAT + VIEW FULL MAP -->
                         <LinearLayout
@@ -229,18 +240,6 @@
                                 android:textColor="#90CAF9"
                                 android:textSize="9sp"
                                 android:typeface="monospace" />
-
-                            <TextView
-                                android:id="@+id/btnFullMap"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:background="?attr/selectableItemBackground"
-                                android:clickable="true"
-                                android:focusable="true"
-                                android:paddingStart="8dp"
-                                android:text="Full map ›"
-                                android:textColor="@color/primary"
-                                android:textSize="10sp" />
 
                         </LinearLayout>
 

@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/action_ht"
+        android:title="HT"
+        android:icon="@drawable/ic_more_vert"/>
     <item
         android:id="@+id/back_to_login"
         android:title="Logout"
