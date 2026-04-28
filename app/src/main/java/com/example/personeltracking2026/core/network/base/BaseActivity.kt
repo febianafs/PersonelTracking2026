@@ -29,6 +29,7 @@ import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.core.sos.SosManager
 import com.example.personeltracking2026.ui.about.AboutActivity
+import com.example.personeltracking2026.ui.bodycam.BodycamActivity
 import com.example.personeltracking2026.ui.login.LoginActivity
 import com.example.personeltracking2026.ui.settings.SettingsActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -187,6 +188,10 @@ abstract class BaseActivity : AppCompatActivity() {
         popup.menuInflater.inflate(R.menu.main_menu, popup.menu)
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_bodycam -> {
+                    startActivity(Intent(this, BodycamActivity::class.java))
+                    true
+                }
                 R.id.action_setting -> {
                     startActivity(Intent(this, SettingsActivity::class.java))
                     true

@@ -157,11 +157,46 @@
                         android:layout_height="170dp"
                         android:layout_marginBottom="1dp">
 
-                        <!-- MAP VIEW -->
-                        <org.maplibre.android.maps.MapView
-                            android:id="@+id/mapView"
+                        <FrameLayout
                             android:layout_width="match_parent"
-                            android:layout_height="170dp"/>
+                            android:layout_height="144dp">
+
+                            <!-- MAP VIEW -->
+                            <org.maplibre.android.maps.MapView
+                                android:id="@+id/mapView"
+                                android:layout_width="match_parent"
+                                android:layout_height="144dp"/>
+
+                            <!-- ZOOM BUTTON -->
+                            <LinearLayout
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"
+                                android:layout_gravity="end|center"
+                                android:layout_marginEnd="5dp">
+
+                                <ImageButton
+                                    android:id="@+id/btnZoomIn"
+                                    android:layout_width="20dp"
+                                    android:layout_height="20dp"
+                                    android:layout_marginBottom="6dp"
+                                    android:src="@drawable/ic_zoom_in"
+                                    android:background="@android:color/white"
+                                    app:tint="@android:color/black" />
+
+                                <ImageButton
+                                    android:id="@+id/btnZoomOut"
+                                    android:layout_width="20dp"
+                                    android:layout_height="20dp"
+                                    android:src="@drawable/ic_zoom_out"
+                                    android:background="@android:color/white"
+                                    android:layout_marginTop="4dp"
+                                    app:tint="@android:color/black" />
+
+                            </LinearLayout>
+
+
+                        </FrameLayout>
 
                         <!-- KOORDINAT + VIEW FULL MAP -->
                         <LinearLayout
@@ -217,33 +252,7 @@
 
                         </LinearLayout>
 
-                        <!-- ZOOM BUTTON -->
-                        <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical"
-                            android:layout_gravity="end|bottom"
-                            android:layout_marginEnd="5dp"
-                            android:layout_marginBottom="40dp">
 
-                            <ImageButton
-                                android:id="@+id/btnZoomIn"
-                                android:layout_width="20dp"
-                                android:layout_height="20dp"
-                                android:src="@drawable/ic_zoom_in"
-                                android:background="@android:color/white"
-                                app:tint="@android:color/black" />
-
-                            <ImageButton
-                                android:id="@+id/btnZoomOut"
-                                android:layout_width="20dp"
-                                android:layout_height="20dp"
-                                android:src="@drawable/ic_zoom_out"
-                                android:background="@android:color/white"
-                                android:layout_marginTop="4dp"
-                                app:tint="@android:color/black" />
-
-                        </LinearLayout>
 
                     </FrameLayout>
 

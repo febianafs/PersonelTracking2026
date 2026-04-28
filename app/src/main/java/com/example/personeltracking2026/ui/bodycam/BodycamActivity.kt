@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.util.Rational
+import android.view.ContextThemeWrapper
 import android.view.View
 import android.view.ViewGroup
 import android.widget.PopupMenu
@@ -541,25 +542,30 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
     }
 
     private fun showBodycamMenu(anchor: View) {
-        PopupMenu(this, anchor).apply {
-            menuInflater.inflate(R.menu.menu_bodycam, menu)
-            setOnMenuItemClickListener { item ->
-//                when (item.itemId) {
-//                    R.id.menu_settings -> {
-//                        Toast.makeText(this@BodycamActivity, "Settings", Toast.LENGTH_SHORT).show()
-//                        true
-//                    }
-//                    else -> false
-//                }
+        val wrapper = ContextThemeWrapper(this, R.style.DarkPopupMenu)
 
+        PopupMenu(wrapper, anchor).apply {
+            menuInflater.inflate(R.menu.menu_bodycam, menu)
+
+            setOnMenuItemClickListener { item ->
                 when (item.itemId) {
-                    R.id.back_to_login -> {
-                        logoutToLogin()
+                    R.id.action_ht -> {
+                        val intent = Intent(this@BodycamActivity, com.example.personeltracking2026.ui.personel.PersonelActivity::class.java)
+                        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        startActivity(intent)
+                        finish()
                         true
                     }
+
+                    R.id.action_logout -> {
+                        showLogoutConfirmation()
+                        true
+                    }
+
                     else -> false
                 }
             }
+
             show()
         }
     }
