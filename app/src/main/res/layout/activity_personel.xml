@@ -176,14 +176,15 @@
 <!--                            android:scaleType="centerInside"-->
 <!--                            android:padding="4dp"-->
 <!--                            app:tint="@color/white"/>-->
-                        <Button
+                        <TextView
                             android:id="@+id/btnFullMap"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:background="?attr/selectableItemBackground"
                             android:clickable="true"
                             android:focusable="true"
-                            android:paddingStart="8dp"
+                            android:paddingVertical="8dp"
+                            android:paddingStart="16dp"
                             android:text="Full map ›"
                             android:textColor="@color/primary"
                             android:textSize="10sp" />
@@ -196,10 +197,43 @@
                         android:layout_marginBottom="1dp">
 
                         <!-- MAP VIEW -->
-                        <org.maplibre.android.maps.MapView
-                            android:id="@+id/mapView"
+                        <FrameLayout
                             android:layout_width="match_parent"
-                            android:layout_height="110dp" />
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <org.maplibre.android.maps.MapView
+                                android:id="@+id/mapView"
+                                android:layout_width="match_parent"
+                                android:layout_height="86dp" />
+
+                            <LinearLayout
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="end|center"
+                                android:layout_marginEnd="2dp"
+                                android:orientation="vertical">
+
+                                <ImageButton
+                                    android:id="@+id/btnZoomIn"
+                                    android:layout_width="20dp"
+                                    android:layout_height="20dp"
+                                    android:background="@android:color/white"
+                                    android:src="@drawable/ic_zoom_in"
+                                    app:tint="@android:color/black" />
+
+                                <ImageButton
+                                    android:id="@+id/btnZoomOut"
+                                    android:layout_width="20dp"
+                                    android:layout_height="20dp"
+                                    android:layout_marginTop="4dp"
+                                    android:background="@android:color/white"
+                                    android:src="@drawable/ic_zoom_out"
+                                    app:tint="@android:color/black" />
+
+                            </LinearLayout>
+
+                        </FrameLayout>
 
                         <!-- KOORDINAT + VIEW FULL MAP -->
                         <LinearLayout
@@ -244,32 +278,7 @@
                         </LinearLayout>
 
                         <!-- ZOOM BUTTON -->
-                        <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="end|bottom"
-                            android:layout_marginEnd="5dp"
-                            android:layout_marginBottom="40dp"
-                            android:orientation="vertical">
 
-                            <ImageButton
-                                android:id="@+id/btnZoomIn"
-                                android:layout_width="20dp"
-                                android:layout_height="20dp"
-                                android:background="@android:color/white"
-                                android:src="@drawable/ic_zoom_in"
-                                app:tint="@android:color/black" />
-
-                            <ImageButton
-                                android:id="@+id/btnZoomOut"
-                                android:layout_width="20dp"
-                                android:layout_height="20dp"
-                                android:layout_marginTop="4dp"
-                                android:background="@android:color/white"
-                                android:src="@drawable/ic_zoom_out"
-                                app:tint="@android:color/black" />
-
-                        </LinearLayout>
 
                     </FrameLayout>
 
