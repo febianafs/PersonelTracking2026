@@ -557,8 +557,8 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
                         true
                     }
 
-                    R.id.back_to_login -> {
-                        logoutToLogin()
+                    R.id.action_logout -> {
+                        showLogoutConfirmation()
                         true
                     }
 
