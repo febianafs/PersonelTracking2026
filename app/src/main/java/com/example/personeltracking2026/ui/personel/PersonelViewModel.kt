@@ -60,19 +60,7 @@ class PersonelViewModel(
     private val locationRepository: LocationRepository,
     private val sessionManager    : SessionManager
 ) : AndroidViewModel(application) {
-//    private val fileName = "gps_log.csv"
 
-//    private val file: File by lazy {
-//        File(
-//            getApplication<Application>().getExternalFilesDir(null),
-//            fileName
-//        ).apply {
-//            if (!exists()) {
-//                createNewFile()
-//                writeText("timestamp,lat,lon,accuracy\n") // header
-//            }
-//        }
-//    }
     // LOG CSV START
     private val rawFile by lazy {
         File(
@@ -109,22 +97,6 @@ class PersonelViewModel(
         }
     }
 
-//    fun saveToCsv(
-//        timestamp: Long,
-//        lat: Double,
-//        lon: Double,
-//        accuracy: Float
-//    ) {
-//        viewModelScope.launch(Dispatchers.IO) {
-//            try {
-//                FileWriter(file, true).use { writer ->
-//                    writer.append("$timestamp,$lat,$lon,$accuracy\n")
-//                }
-//            } catch (e: Exception) {
-//                Log.e("CSV_LOG", "Error writing CSV", e)
-//            }
-//        }
-//    }
     fun savePublishCsv(loc: LocationData) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -272,12 +244,6 @@ class PersonelViewModel(
                     app.currentLat = filteredLoc.lat
                     app.currentLon = filteredLoc.lon
 
-//                    saveToCsv(
-//                        locationData.timestamp,
-//                        locationData.lat,
-//                        locationData.lon,
-//                        locationData.accuracy
-//                    )
                     // --- INPUT CSV ---
                     //saveFilteredCsv(filteredLoc)
 
@@ -388,7 +354,7 @@ class PersonelViewModel(
         }
 
         // 2. DYNAMIC DISTANCE FILTER
-        val smallMove = 6f + dt
+        val smallMove = 3f + dt
         if (!moving && dist < smallMove) {
             val tau = 6f
             val alpha = dt / (tau + dt)
