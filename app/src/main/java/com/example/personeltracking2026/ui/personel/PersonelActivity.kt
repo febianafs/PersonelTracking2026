@@ -38,6 +38,7 @@ import com.example.personeltracking2026.data.repository.LocationRepository
 import com.example.personeltracking2026.data.repository.PersonelRepository
 import com.example.personeltracking2026.databinding.ActivityPersonelBinding
 import com.example.personeltracking2026.ui.bluetooth.BluetoothLeService
+import com.example.personeltracking2026.utils.DeviceIdentityManager
 import com.example.personeltracking2026.utils.drawableToBitmap
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -174,14 +175,22 @@ class PersonelActivity : BaseActivity() {
 
         setupMap()
 
+        val deviceManager = DeviceIdentityManager(this)
+        val identity = deviceManager.getIdentity()
+
+        if (identity == null) {
+            Toast.makeText(this, "Serial belum diset", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+
         val app = application as App
         SosManager.init(
             mqtt             = app.mqttManager,
             session          = sessionManager,
-            serial           = android.provider.Settings.Secure.getString(
-                contentResolver,
-                android.provider.Settings.Secure.ANDROID_ID
-            ) ?: "unknown",
+            serial           = identity.serial,
+            id               = identity.androidId,
+            type             = SosManager.DeviceType.RADIO,
             locationProvider = { Pair(app.currentLat, app.currentLon) }
         )
 
@@ -260,6 +269,17 @@ class PersonelActivity : BaseActivity() {
 
         viewModel.updateInterval(interval)
         // FIX ANR: hapus viewModel.refreshBattery() — sudah dihandle receiver
+        val app = application as App
+        val identity = DeviceIdentityManager(this).getIdentity() ?: return
+
+        SosManager.init(
+            mqtt             = app.mqttManager,
+            session          = sessionManager,
+            serial           = identity.serial,
+            id               = identity.androidId,
+            type             = SosManager.DeviceType.RADIO,
+            locationProvider = { Pair(app.currentLat, app.currentLon) }
+        )
     }
 
     override fun onPause() {

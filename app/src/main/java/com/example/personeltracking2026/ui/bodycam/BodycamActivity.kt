@@ -30,6 +30,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.personeltracking2026.App
 import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.base.BaseActivity
+import com.example.personeltracking2026.core.mqtt.MqttPayloadBuilder
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.core.sos.SosManager
 import com.example.personeltracking2026.data.repository.BodycamRepository
@@ -40,7 +41,7 @@ import com.pedro.encoder.input.video.CameraHelper
 import com.pedro.library.rtmp.RtmpCamera2
 import com.pedro.library.view.OpenGlView
 import kotlinx.coroutines.launch
-import com.example.personeltracking2026.utils.DeviceIdProvider
+import com.example.personeltracking2026.utils.DeviceIdentityManager
 
 class BodycamActivity : BaseActivity(), ConnectChecker {
 
@@ -58,6 +59,7 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
     private var originalRadius: Float = 0f
     private var originalElevation: Float = 0f
     private var originalMargins: ViewGroup.MarginLayoutParams? = null
+    private var hasPublishedStreamStart = false
     private lateinit var sessionManager: SessionManager
 
     // Stream resolution option
@@ -134,9 +136,17 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
 
         requestBatteryOptimizationExemption()
 
-        // Cek Device Serial Number
-        val deviceId = DeviceIdProvider.getDeviceId(this)
-        Log.d("DEVICE_ID", deviceId)
+        val deviceManager = DeviceIdentityManager(this)
+        val identity = deviceManager.getIdentity()
+
+        if (identity == null) {
+            Toast.makeText(this, "Serial belum diset", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+
+        val serial = identity.serial
+        val androidId = identity.androidId
 
         sessionManager = SessionManager(this)
 
@@ -144,7 +154,9 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
         SosManager.init(
             mqtt             = app.mqttManager,
             session          = sessionManager,
-            serial           = DeviceIdProvider.getDeviceId(this),
+            serial           = serial,
+            id               = androidId,
+            type             = SosManager.DeviceType.BODYCAM,
             locationProvider = { Pair(app.currentLat, app.currentLon) }
         )
 
@@ -199,6 +211,18 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
         ) {
             startCameraPreview()
         }
+
+        val app = application as App
+        val identity = DeviceIdentityManager(this).getIdentity() ?: return
+
+        SosManager.init(
+            mqtt             = app.mqttManager,
+            session          = sessionManager,
+            serial           = identity.serial,
+            id               = identity.androidId,
+            type             = SosManager.DeviceType.BODYCAM,
+            locationProvider = { Pair(app.currentLat, app.currentLon) }
+        )
     }
 
     override fun onPause() {
@@ -297,7 +321,15 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
     // ─────────────────────────────────────────────
 
     private fun startRtmpStream() {
-        val serial = DeviceIdProvider.getDeviceId(this)
+        val deviceManager = DeviceIdentityManager(this)
+        val identity = deviceManager.getIdentity()
+
+        if (identity == null) {
+            Toast.makeText(this, "Serial belum diset", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val serial = identity.serial
         val url = StreamUtils.getRtmpUrl(serial)
         if (!hasAudioPermission()) {
             Toast.makeText(this, "Izin mikrofon diperlukan", Toast.LENGTH_SHORT).show()
@@ -509,6 +541,10 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
             }
             is StreamState.Live -> {
                 startRtmpStream()
+
+                hasPublishedStreamStart = true
+                publishBodycamStream()
+
                 binding.layoutIdle?.visibility = View.GONE
                 binding.layoutEnded?.visibility = View.GONE
                 binding.liveIndicator?.visibility = View.VISIBLE
@@ -520,6 +556,7 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
                 stopRtmpStream()
 
                 stopCameraPreview()
+                hasPublishedStreamStart = false
 
                 binding.surfaceView?.visibility = View.GONE
                 binding.layoutIdle?.visibility = View.GONE
@@ -676,5 +713,26 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
             binding.imgChart?.visibility = View.VISIBLE
             binding.liveIndicator.visibility = View.VISIBLE
         }
+    }
+
+    // ─────────────────────────────────────────────
+    //  PUBLISH DATA PAYLOAD
+    // ─────────────────────────────────────────────
+
+    private fun publishBodycamStream() {
+        val app = application as App
+        val identity = DeviceIdentityManager(this).getIdentity() ?: return
+
+        val serial = identity.serial
+        val androidId = identity.androidId
+        val streamUrl = StreamUtils.getRtmpUrl(serial)
+
+        val payload = MqttPayloadBuilder.buildBodycamDataPayload(
+            serialNumber = serial,
+            androidId = androidId,
+            streamUrl = streamUrl
+        )
+
+        app.mqttManager.publishBodycamData(payload)
     }
 }

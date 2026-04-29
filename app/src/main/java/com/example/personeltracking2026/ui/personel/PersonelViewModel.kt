@@ -22,6 +22,7 @@ import com.example.personeltracking2026.data.model.RadioDataPayload
 import com.example.personeltracking2026.data.repository.LocationRepository
 import com.example.personeltracking2026.data.repository.PersonelRepository
 import com.example.personeltracking2026.data.repository.Result
+import com.example.personeltracking2026.utils.DeviceIdentityManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -299,17 +300,25 @@ class PersonelViewModel(
             Log.d("MQTT_TIMER", "MQTT NOT CONNECTED → SKIP")
             return
         }
-        val serialNumber = Settings.Secure.getString(
-            getApplication<Application>().contentResolver,
-            Settings.Secure.ANDROID_ID
-        ) ?: "unknown"
+
+        val deviceManager = DeviceIdentityManager(getApplication())
+        val identity = deviceManager.getIdentity()
+
+        if (identity == null) {
+            Log.e("MQTT", "Serial belum di-set")
+            return
+        }
+
+        val serialNumber = identity.serial
+        val androidId    = identity.androidId
 
         val hr  = _heartRateState.value
         val bat = _batteryState.value
 
-        val payload = MqttPayloadBuilder.buildDataPayload(
+        val payload = MqttPayloadBuilder.buildRadioDataPayload(
             session      = sessionManager,
             serialNumber = serialNumber,
+            androidId    = androidId,
             lat          = location.lat,
             lon          = location.lon,
             gpsTimestamp = location.timestamp,
@@ -323,7 +332,7 @@ class PersonelViewModel(
         //savePublishCsv(location)
         //Log.d("MQTT_TIMER", "SEND PAYLOAD = $payload")
         Log.d("GPS_TEST", "time=${location.timestamp}, lat=${location.lat}, lon=${location.lon}")
-        mqttManager.publishData(payload)
+        mqttManager.publishRadioData(payload)
         RadioDataPayload::class.java.declaredFields.forEach {
             Log.d("FIELDS", it.name)
         }
@@ -396,19 +405,26 @@ class PersonelViewModel(
     fun publishSos(sosValue: Int) {
         val loc = _locationState.value.data ?: return
 
-        val serialNumber = Settings.Secure.getString(
-            getApplication<Application>().contentResolver,
-            Settings.Secure.ANDROID_ID
-        ) ?: "unknown"
+        val deviceManager = DeviceIdentityManager(getApplication())
+        val identity = deviceManager.getIdentity()
 
-        val payload = MqttPayloadBuilder.buildSosPayload(
+        if (identity == null) {
+            Log.e("MQTT", "Serial belum di-set")
+            return
+        }
+
+        val serialNumber = identity.serial
+        val androidId    = identity.androidId
+
+        val payload = MqttPayloadBuilder.buildRadioSosPayload(
             session      = sessionManager,
             serialNumber = serialNumber,
+            androidId    = androidId,
             lat          = loc.lat,
             lon          = loc.lon,
             sos          = sosValue
         )
-        mqttManager.publishSos(payload)
+        mqttManager.publishRadioSos(payload)
     }
 
     // ─── HEART RATE (BLE) ────────────────────────────────────────────────────

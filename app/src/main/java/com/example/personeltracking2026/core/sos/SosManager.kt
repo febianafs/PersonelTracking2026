@@ -11,20 +11,31 @@ object SosManager {
     private val _isActive = MutableStateFlow(false)
     val isActive: StateFlow<Boolean> = _isActive.asStateFlow()
 
+    enum class DeviceType {
+        RADIO,
+        BODYCAM
+    }
+
     private var mqttManager: MqttManager? = null
     private var sessionManager: SessionManager? = null
     private var serialNumber: String = "unknown"
+    private var androidId: String = "unknown"
+    private var deviceType: DeviceType = DeviceType.RADIO
     private var getLocation: (() -> Pair<Double, Double>)? = null
 
     fun init(
         mqtt: MqttManager,
         session: SessionManager,
         serial: String,
+        id: String,
+        type: DeviceType,
         locationProvider: () -> Pair<Double, Double>
     ) {
         mqttManager    = mqtt
         sessionManager = session
         serialNumber   = serial
+        androidId      = id
+        deviceType     = type
         getLocation    = locationProvider
     }
 
@@ -37,13 +48,27 @@ object SosManager {
         val session = sessionManager ?: return
         val (lat, lon) = getLocation?.invoke() ?: return
 
-        val payload = MqttPayloadBuilder.buildSosPayload(
-            session      = session,
-            serialNumber = serialNumber,
-            lat          = lat,
-            lon          = lon,
-            sos          = sosValue
-        )
-        mqtt.publishSos(payload)
+        when (deviceType) {
+            DeviceType.RADIO -> {
+                val payload = MqttPayloadBuilder.buildRadioSosPayload(
+                    session      = session,
+                    serialNumber = serialNumber,
+                    androidId    = androidId,
+                    lat          = lat,
+                    lon          = lon,
+                    sos          = sosValue
+                )
+                mqtt.publishRadioSos(payload)
+            }
+
+            DeviceType.BODYCAM -> {
+                val payload = MqttPayloadBuilder.buildBodycamSosPayload(
+                    serialNumber = serialNumber,
+                    androidId    = androidId,
+                    sos          = sosValue
+                )
+                mqtt.publishBodycamSos(payload)
+            }
+        }
     }
 }
