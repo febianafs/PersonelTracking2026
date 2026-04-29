@@ -30,6 +30,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.personeltracking2026.App
 import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.base.BaseActivity
+import com.example.personeltracking2026.core.navigation.LastScreen
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.core.sos.SosManager
 import com.example.personeltracking2026.data.repository.BodycamRepository
@@ -191,6 +192,7 @@ class BodycamActivity : BaseActivity(), ConnectChecker {
 
     override fun onResume() {
         super.onResume()
+        SessionManager(this).saveLastScreen(LastScreen.BODYCAM)
         // SARAN 1: cek isSurfaceReady sebelum startPreview
         if (!isSurfaceReady) return
         if (isInPictureInPictureMode) return

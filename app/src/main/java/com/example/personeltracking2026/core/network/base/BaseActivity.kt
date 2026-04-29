@@ -189,7 +189,10 @@ abstract class BaseActivity : AppCompatActivity() {
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_bodycam -> {
-                    startActivity(Intent(this, BodycamActivity::class.java))
+                    val intent = Intent(this, BodycamActivity::class.java)
+                    intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    startActivity(intent)
+                    finish()
                     true
                 }
                 R.id.action_setting -> {

@@ -30,6 +30,7 @@ import com.example.personeltracking2026.core.map.MapTypeManager
 import com.example.personeltracking2026.core.mqtt.MqttConfigManager
 import com.example.personeltracking2026.core.mqtt.MqttPayloadBuilder
 import com.example.personeltracking2026.core.mqtt.MqttReconnectManager
+import com.example.personeltracking2026.core.navigation.LastScreen
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.core.sos.SosManager
 import com.example.personeltracking2026.data.model.LocationData
@@ -241,6 +242,7 @@ class PersonelActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        SessionManager(this).saveLastScreen(LastScreen.PERSONEL)
         binding.mapView.onResume()
         val savedType = getSharedPreferences("map_settings", MODE_PRIVATE)
             .getString("map_type", MapTypeManager.MapType.STANDARD.name)
