@@ -2,6 +2,8 @@ package com.example.personeltracking2026.core.mqtt
 
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.data.model.BatteryPayload
+import com.example.personeltracking2026.data.model.BodycamDataPayload
+import com.example.personeltracking2026.data.model.BodycamSosPayload
 import com.example.personeltracking2026.data.model.GpsPayload
 import com.example.personeltracking2026.data.model.IdentityPayload
 import com.example.personeltracking2026.data.model.RadioDataPayload
@@ -29,9 +31,10 @@ object MqttPayloadBuilder {
      * @param appVersion      Versi aplikasi yang sedang berjalan
      * @param rtmpUrl         Url livestream dari setiap device
      */
-    fun buildDataPayload(
+    fun buildRadioDataPayload(
         session: SessionManager,
         serialNumber: String,
+        androidId: String,
         lat: Double,
         lon: Double,
         gpsTimestamp: Long,
@@ -57,6 +60,7 @@ object MqttPayloadBuilder {
         return RadioDataPayload(
             timestamp    = nowSec,
             serialNumber = serialNumber,
+            androidId    = androidId,
             appVersion   = appVersion,
             identity     = identity,
             gps = GpsPayload(
@@ -86,9 +90,10 @@ object MqttPayloadBuilder {
      * @param lat           Latitude posisi saat SOS
      * @param lon           Longitude posisi saat SOS
      */
-    fun buildSosPayload(
+    fun buildRadioSosPayload(
         session: SessionManager,
         serialNumber: String,
+        androidId: String,
         lat: Double,
         lon: Double,
         sos: Int
@@ -97,12 +102,43 @@ object MqttPayloadBuilder {
         return RadioSosPayload(
             timestamp    = nowSec,
             serialNumber = serialNumber,
+            androidId    = androidId,
             id           = session.getUserId()?.toString() ?: "",
             name         = session.getName() ?: "",
             avatarUrl    = session.getAvatar() ?: "",
             sos          = sos,
             latitude     = lat,
             longitude    = lon
+        )
+    }
+
+    fun buildBodycamDataPayload(
+        serialNumber: String,
+        androidId: String,
+        streamUrl: String
+    ): BodycamDataPayload {
+        val nowSec = System.currentTimeMillis() / 1000
+
+        return BodycamDataPayload(
+            timestamp    = nowSec,
+            serialNumber = serialNumber,
+            androidId    = androidId,
+            streamUrl    = streamUrl
+        )
+    }
+
+    fun buildBodycamSosPayload(
+        serialNumber: String,
+        androidId: String,
+        sos: Int
+    ): BodycamSosPayload {
+        val nowSec = System.currentTimeMillis() / 1000
+
+        return BodycamSosPayload(
+            timestamp    = nowSec,
+            serialNumber = serialNumber,
+            androidId    = androidId,
+            sos          = sos
         )
     }
 }

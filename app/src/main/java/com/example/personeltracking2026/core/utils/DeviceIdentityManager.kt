@@ -7,6 +7,11 @@ class DeviceIdentityManager(private val context: Context) {
 
     private val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 
+
+    data class DeviceIdentity(
+        val serial      : String,
+        val androidId   : String
+    )
     companion object {
         private const val PREF_NAME = "device_identity_prefs"
         private const val KEY_SERIAL = "serial_number"
@@ -68,5 +73,14 @@ class DeviceIdentityManager(private val context: Context) {
     // Optional: clear data (misal logout / reset device)
     fun clear() {
         prefs.edit().clear().apply()
+    }
+
+    fun getIdentity(): DeviceIdentity? {
+        val serial = getValidSerial() ?: return null
+
+        return DeviceIdentity(
+            serial = serial,
+            androidId = getCurrentDeviceId()
+        )
     }
 }

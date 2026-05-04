@@ -5,6 +5,8 @@ import android.os.Build
 import android.util.Log
 import com.example.personeltracking2026.core.mqtt.queue.MqttQueueManager
 import com.example.personeltracking2026.core.utils.MqttLogger
+import com.example.personeltracking2026.data.model.BodycamDataPayload
+import com.example.personeltracking2026.data.model.BodycamSosPayload
 import com.example.personeltracking2026.data.model.RadioDataPayload
 import com.example.personeltracking2026.data.model.RadioSosPayload
 import com.google.gson.Gson
@@ -31,8 +33,10 @@ class MqttManager(private val context: Context) {
 
     companion object {
         private const val TAG            = "MqttManager"
-        const val TOPIC_DATA             = "tjw/radio/data"
-        const val TOPIC_SOS              = "tjw/radio/sos"
+        const val TOPIC_RADIO_DATA       = "tjw/radio/data"
+        const val TOPIC_BODYCAM_DATA     = "tjw/bodycam/data"
+        const val TOPIC_RADIO_SOS        = "tjw/radio/sos"
+        const val TOPIC_BODYCAM_SOS      = "tjw/bodycam/sos"
         const val QOS_DATA               = 1
         const val QOS_SOS                = 2
         private const val MAX_RETRY      = 5
@@ -103,19 +107,33 @@ class MqttManager(private val context: Context) {
 
     fun isConnected(): Boolean = client?.state?.isConnected == true
 
-    fun publishData(payload: RadioDataPayload) {
+    fun publishRadioData(payload: RadioDataPayload) {
         scope.launch {
-            val json = buildDataJson(payload)
-            publish(TOPIC_DATA, json, QOS_DATA)
+            val json = buildRadioDataJson(payload)
+            publish(TOPIC_RADIO_DATA, json, QOS_DATA)
         }
     }
 
-    fun publishSos(payload: RadioSosPayload) {
+    fun publishRadioSos(payload: RadioSosPayload) {
         scope.launch {
-            val json = buildSosJson(payload)
-            publish(TOPIC_SOS, json, QOS_SOS)
+            val json = buildRadioSosJson(payload)
+            publish(TOPIC_RADIO_SOS, json, QOS_SOS)
         }
     }
+
+    fun publishBodycamData(payload: BodycamDataPayload) {
+        scope.launch {
+            val json = buildBodycamDataJson(payload)
+            publish(TOPIC_BODYCAM_DATA, json, QOS_DATA)
+        }
+    }
+    fun publishBodycamSos(payload: BodycamSosPayload) {
+        scope.launch {
+            val json = buildBodycamSosJson(payload)
+            publish(TOPIC_BODYCAM_SOS, json, QOS_SOS)
+        }
+    }
+
 //    fun publishData(payload: RadioDataPayload) {
 //        scope.launch { publish(TOPIC_DATA, gson.toJson(payload), QOS_DATA) }
 //    }
@@ -235,57 +253,77 @@ class MqttManager(private val context: Context) {
         }
     }
 
-    private fun buildDataJson(p: RadioDataPayload): String {
+    private fun buildRadioDataJson(p: RadioDataPayload): String {
         return JSONObject().apply {
 
-            put("timestamp", p.timestamp?: "")
-            put("serial_number", p.serialNumber?: "")
-            put("app_version", p.appVersion?: "")
+            put("timestamp", p.timestamp)
+            put("serial_number", p.serialNumber)
+            put("android_id", p.androidId)
+            put("app_version", p.appVersion)
 
             put("identity", JSONObject().apply {
-                put("id", p.identity.id?: "")
-                put("nrp", p.identity.nrp?: "")
-                put("name", p.identity.name?: "")
-                put("rank", p.identity.rank?: "")
-                put("unit", p.identity.unit?: "")
-                put("battalion", p.identity.battalion?: "")
-                put("squad", p.identity.squad?: "")
-                put("avatar_url", p.identity.avatarUrl?: "")
+                put("id", p.identity.id)
+                put("nrp", p.identity.nrp)
+                put("name", p.identity.name)
+                put("rank", p.identity.rank)
+                put("unit", p.identity.unit)
+                put("battalion", p.identity.battalion)
+                put("squad", p.identity.squad)
+                put("avatar_url", p.identity.avatarUrl)
             })
 
             put("gps", JSONObject().apply {
-                put("gps_timestamp", p.gps.gpsTimestamp?: "")
-                put("latitude", p.gps.latitude?: "")
-                put("longitude", p.gps.longitude?: "")
+                put("gps_timestamp", p.gps.gpsTimestamp)
+                put("latitude", p.gps.latitude)
+                put("longitude", p.gps.longitude)
             })
 
             put("radio_health", JSONObject().apply {
-                put("heartrate_timestamp", p.radioHealth.heartrateTimestamp?: "")
-                put("heartrate", p.radioHealth.heartrate?: "")
+                put("heartrate_timestamp", p.radioHealth.heartrateTimestamp)
+                put("heartrate", p.radioHealth.heartrate)
             })
 
             put("battery", JSONObject().apply {
-                put("battery_timestamp", p.battery.batteryTimestamp?: "")
-                put("level", p.battery.level?: "")
+                put("battery_timestamp", p.battery.batteryTimestamp)
+                put("level", p.battery.level)
             })
 
             put("stream", JSONObject().apply {
-                put("rtmp_url", p.stream.rtmpUrl?: "")
+                put("rtmp_url", p.stream.rtmpUrl)
             })
 
         }.toString()
     }
 
-    private fun buildSosJson(p: RadioSosPayload): String {
+    private fun buildRadioSosJson(p: RadioSosPayload): String {
         return JSONObject().apply {
-            put("timestamp", p.timestamp?: "")
-            put("serial_number", p.serialNumber?: "")
-            put("id", p.id?: "")
-            put("name", p.name?: "")
-            put("avatar", p.avatarUrl?: "")
-            put("sos", p.sos?: "")
-            put("latitude", p.latitude?: "")
-            put("longitude", p.longitude?: "")
+            put("timestamp", p.timestamp)
+            put("serial_number", p.serialNumber)
+            put("android_id", p.androidId)
+            put("id", p.id)
+            put("name", p.name)
+            put("avatar", p.avatarUrl)
+            put("sos", p.sos)
+            put("latitude", p.latitude)
+            put("longitude", p.longitude)
+        }.toString()
+    }
+
+    private fun buildBodycamDataJson(p: BodycamDataPayload): String {
+        return JSONObject().apply {
+            put("timestamp", p.timestamp)
+            put("serial_number", p.serialNumber)
+            put("android_id", p.androidId)
+            put("stream_url", p.streamUrl)
+        }.toString()
+    }
+
+    private fun buildBodycamSosJson(p: BodycamSosPayload): String {
+        return JSONObject().apply {
+            put("timestamp", p.timestamp)
+            put("serial_number", p.serialNumber)
+            put("android_id", p.androidId)
+            put("sos", p.sos)
         }.toString()
     }
 }

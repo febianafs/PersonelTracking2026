@@ -7,6 +7,7 @@ import com.google.gson.annotations.SerializedName
 data class RadioDataPayload(
     @SerializedName("timestamp")      val timestamp: Long,
     @SerializedName("serial_number")  val serialNumber: String,
+    @SerializedName("android_id")      val androidId: String,
     @SerializedName("app_version")    val appVersion: String,
     @SerializedName("identity")       val identity: IdentityPayload,
     @SerializedName("gps")            val gps: GpsPayload,
@@ -51,10 +52,29 @@ data class StreamPayload(
 data class RadioSosPayload(
     @SerializedName("timestamp")     val timestamp: Long,
     @SerializedName("serial_number") val serialNumber: String,
+    @SerializedName("android_id")     val androidId: String,
     @SerializedName("id")            val id: String,
     @SerializedName("name")          val name: String,
     @SerializedName("avatar")        val avatarUrl: String,
     @SerializedName("sos")           val sos: Int,
     @SerializedName("latitude")      val latitude: Double,
     @SerializedName("longitude")     val longitude: Double
+)
+
+// ─── TOPIC: bodycam/data ────────────────────────────────────────────────────────
+
+data class BodycamDataPayload(
+    @SerializedName("timestamp")     val timestamp: Long,
+    @SerializedName("serial_number") val serialNumber: String,
+    @SerializedName("android_id")    val androidId: String,
+    @SerializedName("stream_url")    val streamUrl: String
+)
+
+// ─── TOPIC: bodycam/sos ────────────────────────────────────────────────────────
+
+data class BodycamSosPayload(
+    @SerializedName("timestamp")     val timestamp: Long,
+    @SerializedName("serial_number") val serialNumber: String,
+    @SerializedName("android_id")    val androidId: String,
+    @SerializedName("sos")           val sos: Int,
 )

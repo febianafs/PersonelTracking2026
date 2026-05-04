@@ -27,6 +27,7 @@ import com.example.personeltracking2026.R
 import com.example.personeltracking2026.core.base.BaseActivity
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.core.sos.SosManager
+import com.example.personeltracking2026.utils.DeviceIdentityManager
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -82,14 +83,22 @@ class BluetoothActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_bluetooth)
 
+        val deviceManager = DeviceIdentityManager(this)
+        val identity = deviceManager.getIdentity()
+
+        if (identity == null) {
+            Toast.makeText(this, "Serial belum diset", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+
         val app = application as App
         SosManager.init(
-            mqtt = app.mqttManager,
-            session = SessionManager(this),
-            serial = android.provider.Settings.Secure.getString(
-                contentResolver,
-                android.provider.Settings.Secure.ANDROID_ID
-            ) ?: "unknown",
+            mqtt             = app.mqttManager,
+            session          = SessionManager(this),
+            serial           = identity.serial,
+            id               = identity.androidId,
+            type             = SosManager.DeviceType.RADIO,
             locationProvider = { Pair(app.currentLat, app.currentLon) } // atau bisa diganti kalau ada location
         )
 

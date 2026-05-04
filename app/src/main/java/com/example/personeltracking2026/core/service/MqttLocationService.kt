@@ -27,7 +27,7 @@ import com.example.personeltracking2026.core.mqtt.MqttPayloadBuilder
 import com.example.personeltracking2026.core.mqtt.MqttReconnectManager
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.core.utils.Constants
-import com.example.personeltracking2026.utils.DeviceIdProvider
+import com.example.personeltracking2026.utils.DeviceIdentityManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -232,10 +232,16 @@ class MqttLocationService : Service() {
                 return@launch
             }
 
-            val serialNumber = Settings.Secure.getString(
-                contentResolver,
-                Settings.Secure.ANDROID_ID
-            ) ?: "unknown"
+            val deviceManager = DeviceIdentityManager(this@MqttLocationService)
+            val identity = deviceManager.getIdentity()
+
+            if (identity == null) {
+                Log.e("MQTT", "Serial belum di-set")
+                return@launch
+            }
+
+            val serialNumber = identity.serial
+            val androidId    = identity.androidId
 
             val nowMs = System.currentTimeMillis()
 
@@ -243,9 +249,10 @@ class MqttLocationService : Service() {
             val app          = application as? com.example.personeltracking2026.App
             val hr           = app?.currentHeartRate   ?: 0
             val hrTs         = app?.currentHeartRateTs?.takeIf { it > 0 } ?: nowMs
-            val payload = MqttPayloadBuilder.buildDataPayload(
+            val payload = MqttPayloadBuilder.buildRadioDataPayload(
                 session      = sessionManager,
                 serialNumber = serialNumber,
+                androidId    = androidId,
                 lat          = lat,
                 lon          = lon,
                 gpsTimestamp = nowMs,
@@ -256,7 +263,7 @@ class MqttLocationService : Service() {
                 rtmpUrl      = StreamUtils.getRtmpUrl(serialNumber)
             )
 
-            mqttManager.publishData(payload)
+            mqttManager.publishRadioData(payload)
         }
     }
 

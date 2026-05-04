@@ -22,6 +22,7 @@ import com.example.personeltracking2026.data.model.RadioDataPayload
 import com.example.personeltracking2026.data.repository.LocationRepository
 import com.example.personeltracking2026.data.repository.PersonelRepository
 import com.example.personeltracking2026.data.repository.Result
+import com.example.personeltracking2026.utils.DeviceIdentityManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -60,19 +61,7 @@ class PersonelViewModel(
     private val locationRepository: LocationRepository,
     private val sessionManager    : SessionManager
 ) : AndroidViewModel(application) {
-//    private val fileName = "gps_log.csv"
 
-//    private val file: File by lazy {
-//        File(
-//            getApplication<Application>().getExternalFilesDir(null),
-//            fileName
-//        ).apply {
-//            if (!exists()) {
-//                createNewFile()
-//                writeText("timestamp,lat,lon,accuracy\n") // header
-//            }
-//        }
-//    }
     // LOG CSV START
     private val rawFile by lazy {
         File(
@@ -109,22 +98,6 @@ class PersonelViewModel(
         }
     }
 
-//    fun saveToCsv(
-//        timestamp: Long,
-//        lat: Double,
-//        lon: Double,
-//        accuracy: Float
-//    ) {
-//        viewModelScope.launch(Dispatchers.IO) {
-//            try {
-//                FileWriter(file, true).use { writer ->
-//                    writer.append("$timestamp,$lat,$lon,$accuracy\n")
-//                }
-//            } catch (e: Exception) {
-//                Log.e("CSV_LOG", "Error writing CSV", e)
-//            }
-//        }
-//    }
     fun savePublishCsv(loc: LocationData) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -272,12 +245,6 @@ class PersonelViewModel(
                     app.currentLat = filteredLoc.lat
                     app.currentLon = filteredLoc.lon
 
-//                    saveToCsv(
-//                        locationData.timestamp,
-//                        locationData.lat,
-//                        locationData.lon,
-//                        locationData.accuracy
-//                    )
                     // --- INPUT CSV ---
                     //saveFilteredCsv(filteredLoc)
 
@@ -333,17 +300,25 @@ class PersonelViewModel(
             Log.d("MQTT_TIMER", "MQTT NOT CONNECTED → SKIP")
             return
         }
-        val serialNumber = Settings.Secure.getString(
-            getApplication<Application>().contentResolver,
-            Settings.Secure.ANDROID_ID
-        ) ?: "unknown"
+
+        val deviceManager = DeviceIdentityManager(getApplication())
+        val identity = deviceManager.getIdentity()
+
+        if (identity == null) {
+            Log.e("MQTT", "Serial belum di-set")
+            return
+        }
+
+        val serialNumber = identity.serial
+        val androidId    = identity.androidId
 
         val hr  = _heartRateState.value
         val bat = _batteryState.value
 
-        val payload = MqttPayloadBuilder.buildDataPayload(
+        val payload = MqttPayloadBuilder.buildRadioDataPayload(
             session      = sessionManager,
             serialNumber = serialNumber,
+            androidId    = androidId,
             lat          = location.lat,
             lon          = location.lon,
             gpsTimestamp = location.timestamp,
@@ -357,7 +332,7 @@ class PersonelViewModel(
         //savePublishCsv(location)
         //Log.d("MQTT_TIMER", "SEND PAYLOAD = $payload")
         Log.d("GPS_TEST", "time=${location.timestamp}, lat=${location.lat}, lon=${location.lon}")
-        mqttManager.publishData(payload)
+        mqttManager.publishRadioData(payload)
         RadioDataPayload::class.java.declaredFields.forEach {
             Log.d("FIELDS", it.name)
         }
@@ -388,7 +363,7 @@ class PersonelViewModel(
         }
 
         // 2. DYNAMIC DISTANCE FILTER
-        val smallMove = 6f + dt
+        val smallMove = 3f + dt
         if (!moving && dist < smallMove) {
             val tau = 6f
             val alpha = dt / (tau + dt)
@@ -430,19 +405,26 @@ class PersonelViewModel(
     fun publishSos(sosValue: Int) {
         val loc = _locationState.value.data ?: return
 
-        val serialNumber = Settings.Secure.getString(
-            getApplication<Application>().contentResolver,
-            Settings.Secure.ANDROID_ID
-        ) ?: "unknown"
+        val deviceManager = DeviceIdentityManager(getApplication())
+        val identity = deviceManager.getIdentity()
 
-        val payload = MqttPayloadBuilder.buildSosPayload(
+        if (identity == null) {
+            Log.e("MQTT", "Serial belum di-set")
+            return
+        }
+
+        val serialNumber = identity.serial
+        val androidId    = identity.androidId
+
+        val payload = MqttPayloadBuilder.buildRadioSosPayload(
             session      = sessionManager,
             serialNumber = serialNumber,
+            androidId    = androidId,
             lat          = loc.lat,
             lon          = loc.lon,
             sos          = sosValue
         )
-        mqttManager.publishSos(payload)
+        mqttManager.publishRadioSos(payload)
     }
 
     // ─── HEART RATE (BLE) ────────────────────────────────────────────────────
