@@ -100,6 +100,12 @@ class MqttManager(private val context: Context) {
         }
     }
 
+    fun refreshTopicsAfterSettingsChanged() {
+        if (isConnected()) {
+            subscribeSosTopics()
+        }
+    }
+
     fun publishDirect(topic: String, payload: String) {
         client?.publishWith()
             ?.topic(topic)

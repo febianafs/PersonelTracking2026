@@ -12,10 +12,9 @@ android {
         applicationId = "com.example.personeltracking2026"
         minSdk = 24
         targetSdk = 36
-
-        versionCode = 5
-        versionName = "1.0.4"
-        buildConfigField("String", "APP_VERSION", "\"1.0.4\"")
+        versionCode = 7
+        versionName = "1.0.6"
+        buildConfigField("String", "APP_VERSION", "\"1.0.6\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

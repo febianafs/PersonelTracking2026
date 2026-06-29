@@ -165,6 +165,21 @@ class App : Application() {
         currentAccuracy = location.accuracy
     }
 
+    fun refreshSosIdentity() {
+        val session       = com.example.personeltracking2026.core.session.SessionManager(this)
+        val deviceManager = com.example.personeltracking2026.utils.DeviceIdentityManager(this)
+        val identity      = deviceManager.getIdentity()
+
+        com.example.personeltracking2026.core.sos.SosManager.init(
+            mqtt             = mqttManager,
+            session          = session,
+            serial           = identity.serial,
+            id               = identity.androidId,
+            type             = com.example.personeltracking2026.core.sos.SosManager.DeviceType.RADIO,
+            locationProvider = { Triple(currentLat, currentLon, currentAccuracy) }
+        )
+    }
+
     override fun onCreate() {
         super.onCreate()
         mqttManager = MqttManager(this)
@@ -193,17 +208,6 @@ class App : Application() {
             }
         }
 
-        val session       = com.example.personeltracking2026.core.session.SessionManager(this)
-        val deviceManager = com.example.personeltracking2026.utils.DeviceIdentityManager(this)
-        val identity      = deviceManager.getIdentity()
-
-        com.example.personeltracking2026.core.sos.SosManager.init(
-            mqtt             = mqttManager,
-            session          = session,
-            serial           = identity.serial,
-            id               = identity.androidId,
-            type             = com.example.personeltracking2026.core.sos.SosManager.DeviceType.RADIO,
-            locationProvider = { Triple(currentLat, currentLon, currentAccuracy) }
-        )
+        refreshSosIdentity()
     }
 }

@@ -15,6 +15,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.personeltracking2026.App
 import com.example.personeltracking2026.R
+import com.example.personeltracking2026.core.service.MqttLocationService
 import com.example.personeltracking2026.core.session.SessionManager
 import com.example.personeltracking2026.data.model.getClassification
 import com.example.personeltracking2026.data.repository.LoginRepository
@@ -95,10 +96,6 @@ class LoginActivity : AppCompatActivity() {
                                 return@collect
                             }
 
-                            (application as App).mqttManager.connect()
-                            binding.layoutConnecting.visibility = View.GONE
-                            binding.btnLogin.isEnabled = true
-
                             val token = state.data.data?.token ?: ""
 
                             val name = state.data.data?.profile?.full_name
@@ -146,6 +143,11 @@ class LoginActivity : AppCompatActivity() {
                                 rank       = rank,
                                 avatarUrl  = avatarUrl
                             )
+
+                            (application as App).mqttManager.connect()
+                            MqttLocationService.startService(this@LoginActivity)
+                            binding.layoutConnecting.visibility = View.GONE
+                            binding.btnLogin.isEnabled = true
 
                             Log.d("SESSION_AVATAR", sessionManager.getAvatarUrl())
 
